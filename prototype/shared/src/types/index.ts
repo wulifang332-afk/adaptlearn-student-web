@@ -22,6 +22,7 @@ import type {
   TaskAnnotationSchema,
   TaskSchema,
   TeacherAuditExplanationSchema,
+  TeacherDecisionInputSchema,
   ThinkingQualityProfileSchema,
   TraceEventSchema,
   Unit6FixtureSchema,
@@ -53,6 +54,7 @@ export type ReviewCase = z.infer<typeof ReviewCaseSchema>;
 export type StudentSubmission = z.infer<typeof StudentSubmissionSchema>;
 export type MediaUpload = z.infer<typeof MediaUploadSchema>;
 export type DecisionTrace = z.infer<typeof DecisionTraceSchema>;
+export type TeacherDecisionInput = z.infer<typeof TeacherDecisionInputSchema>;
 export type LmsSyncStatus = z.infer<typeof LmsSyncStatusSchema>;
 export type TraceEvent = z.infer<typeof TraceEventSchema>;
 export type SamplePathRow = z.infer<typeof SamplePathRowSchema>;

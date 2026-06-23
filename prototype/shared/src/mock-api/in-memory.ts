@@ -1,6 +1,8 @@
 import { unit6Fixture } from "../fixtures/index.js";
-import { withMockMeta, type MockApiResponse } from "../schemas/index.js";
+import { isLearningPathDeliverable } from "../guards/index.js";
+import { TeacherDecisionInputSchema, withMockMeta, type MockApiResponse } from "../schemas/index.js";
 import type {
+  DecisionTrace,
   KnowledgeNode,
   LearnerProfile,
   LearningPath,
@@ -8,6 +10,7 @@ import type {
   Student,
   StudentSubmission,
   Task,
+  TeacherDecisionInput,
   Unit6Fixture,
 } from "../types/index.js";
 
@@ -31,11 +34,13 @@ export class InMemoryAdaptLearnMockApi {
   readonly fixture: Unit6Fixture;
   private submissions: StudentSubmission[];
   private reviewCases: ReviewCase[];
+  private decisionTraces: DecisionTrace[];
 
   constructor(fixture: Unit6Fixture = unit6Fixture) {
     this.fixture = fixture;
     this.submissions = structuredClone(fixture.submissions);
     this.reviewCases = structuredClone(fixture.review_cases);
+    this.decisionTraces = structuredClone(fixture.decision_traces);
   }
 
   getUnitOverview(): MockApiResponse<Pick<Unit6Fixture, "unit" | "source_counts" | "personas">> {
@@ -83,7 +88,10 @@ export class InMemoryAdaptLearnMockApi {
 
     const activePath = learnerProfile.active_path_id
       ? this.fixture.learning_paths.find(
-          (path) => path.path_id === learnerProfile.active_path_id && path.learner_id === studentId,
+          (path) =>
+            path.path_id === learnerProfile.active_path_id &&
+            path.learner_id === studentId &&
+            isLearningPathDeliverable(path),
         )
       : undefined;
 
@@ -140,6 +148,23 @@ export class InMemoryAdaptLearnMockApi {
     }
 
     return withMockMeta(submission);
+  }
+
+  recordTeacherDecision(input: TeacherDecisionInput): MockApiResponse<DecisionTrace> {
+    const parsed = TeacherDecisionInputSchema.parse(input);
+    const trace: DecisionTrace = {
+      trace_id: `trace_teacher_${parsed.path_id}_${this.decisionTraces.length + 1}`,
+      actor_user_id: parsed.actor_user_id,
+      action: parsed.action,
+      reason_required: parsed.action !== "APPROVE",
+      ...(parsed.reason ? { reason_text: parsed.reason } : {}),
+      before_snapshot_ref: `learning_path:${parsed.path_id}:v${parsed.path_version}`,
+      after_snapshot_ref: `learning_path:${parsed.path_id}:decision:${parsed.action.toLowerCase()}`,
+      created_at: "2026-06-23T04:30:00.000Z",
+    };
+
+    this.decisionTraces.push(trace);
+    return withMockMeta(trace);
   }
 }
 

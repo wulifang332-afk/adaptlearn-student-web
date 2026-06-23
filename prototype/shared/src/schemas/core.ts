@@ -16,6 +16,7 @@ import {
   USER_ROLES,
   VERIFIER_RESULT_STATUSES,
 } from "../constants/index.js";
+import { isLearningPathDeliverable } from "../guards/learning-path.js";
 
 export const MOCK_SIMULATION_NOTICE = "Prototype data; not a real model result." as const;
 
@@ -57,6 +58,14 @@ export const PathStepStateSchema = z.enum(PATH_STEP_STATES);
 export const BloomEvidenceStateSchema = z.enum(BLOOM_EVIDENCE_STATES);
 export const ThinkingLevelSchema = z.enum(THINKING_LEVELS);
 export const DecisionTraceActionSchema = z.enum(DECISION_TRACE_ACTIONS);
+type TeacherDecisionAction = "APPROVE" | "MODIFY" | "REJECT" | "REPLAN";
+const isTeacherDecisionAction = (action: z.infer<typeof DecisionTraceActionSchema>): action is TeacherDecisionAction =>
+  action === "APPROVE" || action === "MODIFY" || action === "REJECT" || action === "REPLAN";
+const TeacherDecisionActionSchema = DecisionTraceActionSchema.refine(
+  isTeacherDecisionAction,
+  "Teacher decision action must be APPROVE, MODIFY, REJECT, or REPLAN",
+);
+const TeacherDecisionReasonSchema = z.string().trim().min(1, "Teacher decision reason is required");
 
 export const UnitMetadataSchema = z.object({
   id: z.literal("U6"),
@@ -256,19 +265,29 @@ export const TeacherAuditExplanationSchema = z.object({
   excluded_task_refs: z.array(z.string().min(1)),
 });
 
-export const LearningPathSchema = z.object({
-  path_id: z.string().min(1),
-  learner_id: z.string().min(1),
-  source_path_id: z.string().min(1),
-  status: LearningPathStateSchema,
-  goal: z.string().min(1),
-  version: z.number().int().positive(),
-  steps: z.array(PathStepSchema).min(1),
-  rule_evaluation: RuleEvaluationSchema,
-  verifier_result: VerifierResultSchema,
-  teacher_audit_explanation: TeacherAuditExplanationSchema,
-  decision_trace_ids: z.array(z.string().min(1)),
-});
+export const LearningPathSchema = z
+  .object({
+    path_id: z.string().min(1),
+    learner_id: z.string().min(1),
+    source_path_id: z.string().min(1),
+    status: LearningPathStateSchema,
+    goal: z.string().min(1),
+    version: z.number().int().positive(),
+    steps: z.array(PathStepSchema).min(1),
+    rule_evaluation: RuleEvaluationSchema,
+    verifier_result: VerifierResultSchema,
+    teacher_audit_explanation: TeacherAuditExplanationSchema,
+    decision_trace_ids: z.array(z.string().min(1)),
+  })
+  .superRefine((path, context) => {
+    if (path.status === "PUBLISHED" && !isLearningPathDeliverable(path)) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["verifier_result", "status"],
+        message: "PUBLISHED learning paths must have PASS verifier status and no blocking review state",
+      });
+    }
+  });
 
 export const ReviewCaseSchema = z.object({
   review_case_id: z.string().min(1),
@@ -324,6 +343,29 @@ export const DecisionTraceSchema = z.object({
   verifier_version: z.string().min(1).optional(),
   created_at: z.string().datetime(),
 });
+
+export const TeacherDecisionInputSchema = z
+  .object({
+    actor_user_id: z.string().min(1),
+    path_id: z.string().min(1),
+    path_version: z.number().int().positive(),
+    action: TeacherDecisionActionSchema,
+    reason: z.string().trim().optional(),
+  })
+  .superRefine((decision, context) => {
+    if (decision.action === "APPROVE") {
+      return;
+    }
+
+    const reason = TeacherDecisionReasonSchema.safeParse(decision.reason);
+    if (!reason.success) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["reason"],
+        message: `${decision.action} requires a non-empty teacher reason`,
+      });
+    }
+  });
 
 export const LmsSyncStatusSchema = z.object({
   sync_id: z.string().min(1),

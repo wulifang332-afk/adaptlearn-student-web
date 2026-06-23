@@ -2,12 +2,14 @@ import {
   FLOW_IDS,
   FLOW_SCREEN_MAP,
   GUARDRAILS,
+  LearningPathSchema,
   ROLE_PERMISSIONS,
   SCREEN_IDS,
   SCREEN_PRIORITIES,
   SCREEN_ROUTES,
   STUDENT_FORBIDDEN_FIELDS,
   createInMemoryMockApi,
+  isLearningPathDeliverable,
   unit6Fixture,
 } from "../src/index.js";
 import { MOCK_SIMULATION_NOTICE, MockMetaSchema } from "../src/schemas/index.js";
@@ -71,6 +73,19 @@ const responses = [
     responsePayloadRef: "mock://responses/runtime/persona_c/rw12",
     idempotencyKey: "idem_runtime_persona_c_rw12",
   }),
+  api.recordTeacherDecision({
+    actor_user_id: "usr_teacher_01",
+    path_id: "PTH01",
+    path_version: 1,
+    action: "APPROVE",
+  }),
+  api.recordTeacherDecision({
+    actor_user_id: "usr_teacher_01",
+    path_id: "PTH01",
+    path_version: 1,
+    action: "MODIFY",
+    reason: "Adjust sequence for class time.",
+  }),
 ];
 
 for (const response of responses) {
@@ -90,6 +105,23 @@ const personaMap = Object.fromEntries(unit6Fixture.personas.map((persona) => [pe
 assert(personaMap.persona_a?.includes("PTH01") ?? false, "Persona A must map to PTH01");
 assert(personaMap.persona_b?.includes("PTH03") ?? false, "Persona B must map to PTH03");
 assert(personaMap.persona_c?.includes("PTH05") ?? false, "Persona C must map to PTH05");
+
+const deliverablePath = unit6Fixture.learning_paths.find((path) => path.path_id === "PTH01");
+assert(Boolean(deliverablePath), "Missing deliverable path fixture");
+assert(isLearningPathDeliverable(deliverablePath!), "PTH01 must be deliverable");
+
+for (const status of ["REVIEW", "BLOCK", "REPLAN"] as const) {
+  const invalidPath = {
+    ...deliverablePath!,
+    status: "PUBLISHED" as const,
+    verifier_result: {
+      ...deliverablePath!.verifier_result,
+      status,
+    },
+  };
+  assert(!isLearningPathDeliverable(invalidPath), `${status} path must not be deliverable`);
+  assert(!LearningPathSchema.safeParse(invalidPath).success, `PUBLISHED + ${status} must fail schema`);
+}
 
 console.log("Contract validation passed");
 console.log(
