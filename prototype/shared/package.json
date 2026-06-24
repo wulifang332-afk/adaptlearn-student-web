@@ -1,0 +1,36 @@
+{
+  "name": "@adaptlearn/shared-foundation",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Shared schemas, fixtures, constants, design tokens, and pure in-memory mock API for AdaptLearn Copilot Phase 0.",
+  "main": "./dist/src/index.js",
+  "types": "./dist/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "default": "./dist/src/index.js"
+    },
+    "./generated/unit6-normalized.json": "./generated/unit6-normalized.json"
+  },
+  "files": [
+    "dist",
+    "generated"
+  ],
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "tsx scripts/lint.ts",
+    "test": "tsx --test tests/*.test.ts",
+    "validate:data": "tsx scripts/build-fixtures.ts && tsx scripts/validate-data.ts",
+    "validate:contracts": "tsx scripts/validate-contracts.ts",
+    "build": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "zod": "^3.25.67"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.3",
+    "tsx": "^4.20.3",
+    "typescript": "^5.8.3"
+  }
+}

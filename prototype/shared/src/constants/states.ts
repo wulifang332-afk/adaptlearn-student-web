@@ -1,0 +1,143 @@
+export const LINT_RESULT_STATUSES = ["INFO", "AUTO_FIX", "WARN", "REVIEW", "BLOCK"] as const;
+export const VERIFIER_RESULT_STATUSES = ["PASS", "ADJUST", "REPLAN", "REVIEW", "BLOCK"] as const;
+
+export const UI_STATES = [
+  "LOADING",
+  "EMPTY",
+  "ERROR_RETRYABLE",
+  "ERROR_BLOCKING",
+  "OFFLINE_READY",
+  "OFFLINE_UNAVAILABLE",
+  "PERMISSION_REQUIRED",
+  "PERMISSION_REVOKED",
+  "SUBMITTING",
+  "QUEUED_SYNC",
+  "REVIEW_PENDING",
+  "VERSION_STALE",
+  "MEDIA_BUFFERING",
+  "RECORDING",
+  "COMPLETED",
+] as const;
+
+export const CONTENT_VERSION_STATES = [
+  "DRAFT",
+  "PRE_LINT",
+  "AUTO_ANNOTATING",
+  "QC_ROUTING",
+  "APPROVED",
+  "PUBLISHED_LOCKED",
+  "WITHDRAWN",
+  "ARCHIVED",
+  "BLOCKED",
+] as const;
+
+export const TASK_ANNOTATION_STATES = [
+  "AUTO_ANNOTATING",
+  "QC_ROUTING",
+  "REVIEW_REQUIRED",
+  "APPROVED",
+  "BLOCKED",
+] as const;
+
+export const LEARNING_PATH_STATES = [
+  "INITIATED",
+  "STATE_PREPARING",
+  "DIAGNOSING",
+  "CANDIDATE_RETRIEVAL",
+  "HARD_FILTERING",
+  "RULE_SCORING",
+  "ASSEMBLING",
+  "PATH_LINT",
+  "VERIFYING",
+  "REPLANNING",
+  "TEACHER_REVIEW",
+  "PUBLISHED",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "STATE_UPDATING",
+  "ARCHIVED",
+  "REJECTED_CANCELLED",
+  "BLOCKED",
+] as const;
+
+export const REVIEW_CASE_STATES = [
+  "OPEN",
+  "ASSIGNED",
+  "IN_REVIEW",
+  "NEEDS_FIX",
+  "APPROVED",
+  "CONDITIONALLY_APPROVED",
+  "REJECTED",
+  "BLOCKED_FINAL",
+  "RESOLVED",
+  "REOPENED",
+] as const;
+
+export const SUBMISSION_STATES = [
+  "DRAFT",
+  "SUBMITTING",
+  "QUEUED_OFFLINE",
+  "RECEIVED",
+  "LINT_PASS",
+  "ISOLATED",
+  "REVIEW_PENDING",
+  "APPLIED",
+  "COMPLETED",
+] as const;
+
+export const MEDIA_UPLOAD_STATES = [
+  "NOT_REQUIRED",
+  "PERMISSION_REQUIRED",
+  "RECORDING",
+  "RECORDED",
+  "UPLOADING",
+  "QUEUED_OFFLINE",
+  "UPLOADED",
+  "FAILED",
+  "REVIEW_PENDING",
+] as const;
+
+export const LMS_SYNC_STATES = [
+  "UNSYNCED",
+  "SYNCING",
+  "FAILED",
+  "RETRY_WAITING",
+  "DEAD_LETTER",
+  "COMPENSATED",
+  "SYNCED",
+] as const;
+
+export const PATH_STEP_STATES = [
+  "LOCKED",
+  "AVAILABLE",
+  "IN_PROGRESS",
+  "COMPLETED",
+  "REVIEW_PENDING",
+  "WITHDRAWN",
+] as const;
+
+export const BLOOM_EVIDENCE_STATES = [
+  "NOT_ASSESSED",
+  "INSUFFICIENT",
+  "EMERGING",
+  "CONFIRMED",
+] as const;
+
+export const THINKING_LEVELS = [
+  "EVIDENCE_INSUFFICIENT",
+  "T0",
+  "T1",
+  "T2",
+  "T3",
+  "T4",
+] as const;
+
+export const DECISION_TRACE_ACTIONS = [
+  "APPROVE",
+  "MODIFY",
+  "OVERRIDE",
+  "REJECT",
+  "CANCEL",
+  "REPLAN",
+  "SYSTEM_EVENT",
+] as const;
