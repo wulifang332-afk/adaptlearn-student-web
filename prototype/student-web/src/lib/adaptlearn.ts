@@ -19,6 +19,13 @@ import {
 export const STUDENT_IDS = ["stu_persona_a", "stu_persona_b", "stu_persona_c"] as const;
 export type StudentId = (typeof STUDENT_IDS)[number];
 
+export const COURSE_OPTIONS = [
+  { id: "grade7_english", label: "Grade 7 English" },
+  { id: "high_school_english", label: "High School English" },
+  { id: "high_school_math", label: "High School Math" },
+] as const;
+export type CourseId = (typeof COURSE_OPTIONS)[number]["id"];
+
 export type RouteState =
   | { screen: "home" }
   | { screen: "path"; pathId: string }
@@ -73,9 +80,9 @@ export type AbilityBand = "Strong" | "Growing" | "Needs Practice";
 
 export type StudentProfileSummary = {
   identity: {
-    persona: string;
-    grade: string;
+    course: string;
     unit: string;
+    unitTitle: string;
     focus: string;
     preference: string;
   };
@@ -88,8 +95,15 @@ export type StudentProfileSummary = {
   reviewItems: Array<{
     taskId: string;
     title: string;
-    label: "Last Practice" | "Try Again" | "Review Focus";
+    label: "Needs Review" | "Try Again" | "Review Focus";
     focus: string;
+    lastResult: string;
+  }>;
+  accuracy: Array<{
+    label: string;
+    value: number;
+    band: AbilityBand;
+    detail: string;
   }>;
   abilities: Array<{
     label: string;
@@ -100,6 +114,7 @@ export type StudentProfileSummary = {
   thinkingSkills: Array<{
     label: string;
     band: AbilityBand;
+    level: number;
     next: string;
   }>;
   strategies: string[];
@@ -358,13 +373,14 @@ const buildStudentProfileSummary = (
   const reflectionCount = taskCards.flatMap((task) => task.learningStrategies).filter((strategy) =>
     /reflection|self-monitoring|check|revise/i.test(strategy),
   ).length;
-  const abilityItems = buildAbilityItems(profile, completedTaskCount, totalTaskCount);
+  const abilityItems = buildAbilityItems(profile);
+  const reviewItems = buildReviewItems(taskCards);
 
   return {
     identity: {
-      persona: student.pseudonymous_label,
-      grade: "Grade 7",
+      course: "Grade 7 English",
       unit: "Unit 6",
+      unitTitle: "The Power of Plants",
       focus: personaFocusLabel(student.persona_id),
       preference: personaPreferenceLabel(student.persona_id),
     },
@@ -394,15 +410,8 @@ const buildStudentProfileSummary = (
         level: clampLevel(42 + evidenceCount * 18),
       },
     ],
-    reviewItems: taskCards.slice(0, 3).map((task, index) => {
-      const hasSubmission = submissions.some((submission) => submission.task_id === task.taskId);
-      return {
-        taskId: task.taskId,
-        title: task.title,
-        label: hasSubmission ? "Last Practice" : index === 0 ? "Try Again" : "Review Focus",
-        focus: task.nodeNames[0] ?? "Unit 6",
-      };
-    }),
+    reviewItems,
+    accuracy: buildAccuracyItems(profile, completedTaskCount, totalTaskCount),
     abilities: abilityItems,
     thinkingSkills: buildThinkingSkills(profile),
     strategies: [
@@ -415,19 +424,21 @@ const buildStudentProfileSummary = (
   };
 };
 
-const buildAbilityItems = (
-  profile: LearnerProfile,
-  completedTaskCount: number,
-  totalTaskCount: number,
-): StudentProfileSummary["abilities"] => [
+const buildAbilityItems = (profile: LearnerProfile): StudentProfileSummary["abilities"] => [
   {
-    label: "Vocabulary",
+    label: "Vocabulary Understanding",
     band: bandFromLevel(averageMastery(profile, ["VOC01", "VOC02", "VOC03", "VOC04"])),
     level: averageMastery(profile, ["VOC01", "VOC02", "VOC03", "VOC04"]),
     note: "Plant words",
   },
   {
-    label: "Reading Order",
+    label: "Sentence Comprehension",
+    band: bandFromLevel(averageMastery(profile, ["TT01", "TT02", "DS03", "DS04"])),
+    level: averageMastery(profile, ["TT01", "TT02", "DS03", "DS04"]),
+    note: "Meaning in text",
+  },
+  {
+    label: "Reading Sequence",
     band: bandFromLevel(averageMastery(profile, ["DS01", "SR04", "DS09"])),
     level: averageMastery(profile, ["DS01", "SR04", "DS09"]),
     note: "Process steps",
@@ -439,16 +450,10 @@ const buildAbilityItems = (
     note: "Proof words",
   },
   {
-    label: "Reflection",
+    label: "Reflection Quality",
     band: bandFromLevel(averageMastery(profile, ["SW01", "SW03", "SW06"])),
     level: averageMastery(profile, ["SW01", "SW03", "SW06"]),
     note: "Check work",
-  },
-  {
-    label: "Task Completion",
-    band: bandFromLevel((completedTaskCount / totalTaskCount) * 100),
-    level: clampLevel((completedTaskCount / totalTaskCount) * 100),
-    note: "Practice path",
   },
 ];
 
@@ -456,29 +461,83 @@ const buildThinkingSkills = (profile: LearnerProfile): StudentProfileSummary["th
   {
     label: "Observe",
     band: bandFromThinkingLevel(profile.thinking_profile.observation_discrimination),
+    level: levelFromThinkingLevel(profile.thinking_profile.observation_discrimination),
     next: "Name what you see.",
   },
   {
     label: "Compare",
     band: bandFromLevel(averageMastery(profile, ["VOC14", "DS08", "CU06"])),
+    level: averageMastery(profile, ["VOC14", "DS08", "CU06"]),
     next: "Find same and different.",
   },
   {
     label: "Sequence",
     band: bandFromLevel(averageMastery(profile, ["DS01", "SR04"])),
+    level: averageMastery(profile, ["DS01", "SR04"]),
     next: "Use first, next, finally.",
   },
   {
     label: "Explain",
     band: bandFromThinkingLevel(profile.thinking_profile.induction_inference),
+    level: levelFromThinkingLevel(profile.thinking_profile.induction_inference),
     next: "Add one reason.",
   },
   {
     label: "Reflect",
     band: bandFromLevel(averageMastery(profile, ["SW06", "LS10", "LS11"])),
+    level: averageMastery(profile, ["SW06", "LS10", "LS11"]),
     next: "Check one answer.",
   },
 ];
+
+const buildAccuracyItems = (
+  profile: LearnerProfile,
+  completedTaskCount: number,
+  totalTaskCount: number,
+): StudentProfileSummary["accuracy"] => {
+  const vocabulary = averageMastery(profile, ["VOC01", "VOC02", "VOC03", "VOC04"]);
+  const readingOrder = averageMastery(profile, ["DS01", "SR04", "DS09"]);
+  const evidence = clampLevel(profile.thinking_profile.evidence_coverage * 100);
+  const completion = clampLevel((completedTaskCount / totalTaskCount) * 100);
+  const overall = clampLevel((vocabulary + readingOrder + evidence + completion) / 4);
+  const recent = clampLevel((vocabulary + readingOrder + completion) / 3);
+
+  return [
+    { label: "Overall accuracy", value: overall, band: bandFromLevel(overall), detail: "Mock progress" },
+    { label: "Recent practice accuracy", value: recent, band: bandFromLevel(recent), detail: "Last Unit 6 tasks" },
+    { label: "Vocabulary accuracy", value: vocabulary, band: bandFromLevel(vocabulary), detail: "Plant words" },
+    { label: "Reading/order accuracy", value: readingOrder, band: bandFromLevel(readingOrder), detail: "Sequence steps" },
+  ];
+};
+
+const buildReviewItems = (taskCards: SafeTaskCard[]): StudentProfileSummary["reviewItems"] => {
+  const findTaskId = (fallback: string, titlePattern: RegExp) =>
+    taskCards.find((task) => titlePattern.test(task.title))?.taskId ?? fallback;
+
+  return [
+    {
+      taskId: findTaskId("UI01", /parts of a plant/i),
+      title: "Label root and stem",
+      label: "Needs Review",
+      focus: "Vocabulary Understanding",
+      lastResult: "Plant words",
+    },
+    {
+      taskId: findTaskId("UI03", /photosynthesis steps/i),
+      title: "Put plant growth steps in order",
+      label: "Try Again",
+      focus: "Reading Sequence",
+      lastResult: "Order words",
+    },
+    {
+      taskId: findTaskId("UI04", /best title/i),
+      title: "Choose evidence words",
+      label: "Review Focus",
+      focus: "Evidence Use",
+      lastResult: "Proof words",
+    },
+  ];
+};
 
 const averageMastery = (profile: LearnerProfile, nodeIds: string[]): number => {
   const matchingStates = profile.bkt_states.filter((state) => nodeIds.includes(state.node_id));
@@ -513,6 +572,19 @@ const bandFromThinkingLevel = (value: ThinkingQualityProfile[keyof ThinkingQuali
     return "Growing";
   }
   return "Needs Practice";
+};
+
+const levelFromThinkingLevel = (value: ThinkingQualityProfile[keyof ThinkingQualityProfile]): number => {
+  if (value === "T3") {
+    return 82;
+  }
+  if (value === "T2") {
+    return 70;
+  }
+  if (value === "T1") {
+    return 56;
+  }
+  return 36;
 };
 
 const masteryToFriendlyLabel = (value: number): "Needs practice" | "Growing" | "Steady" => {
@@ -644,7 +716,7 @@ const personaFocusLabel = (personaId: string): string => {
 
 const personaPreferenceLabel = (personaId: string): string => {
   if (personaId === "persona_a") {
-    return "Label first, explain next";
+    return "Read aloud";
   }
   if (personaId === "persona_b") {
     return "Use evidence words";

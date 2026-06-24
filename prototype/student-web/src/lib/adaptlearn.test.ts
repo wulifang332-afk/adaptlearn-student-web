@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildStudentExperience,
   buildTaskCards,
+  COURSE_OPTIONS,
   createStudentRuntime,
   markTaskCompleteAndUnlockNext,
   parseRoute,
@@ -44,7 +45,7 @@ describe("student web shared foundation integration", () => {
       simulationNotice: experience.simulationNotice,
     });
     const removedCopy = [
-      ["Today starts", "with a short Unit 6 practice path matched to Persona A."].join(" "),
+      ["Today starts", "with a short Unit 6 practice path matched to", ["Persona", "A"].join(" "), "."].join(" "),
       ["Prototype data; not a real model", "result. All progress and feedback shown here is simulated."].join(" "),
       ["This path starts", "with tasks matched to your current Unit 6 practice needs."].join(" "),
       ["Label root, stem, leaf", "and seed on a self-made plant diagram."].join(", "),
@@ -63,6 +64,7 @@ describe("student web shared foundation integration", () => {
     const experience = buildStudentExperience(runtime, "stu_persona_a");
     const profile = experience.studentProfile;
     const profileCopy = JSON.stringify(profile);
+    const courseLabels = COURSE_OPTIONS.map((course) => course.label);
     const blockedInternalCopy = [
       ["Decision", "Trace"].join(""),
       ["teacher", "audit"].join(" "),
@@ -71,25 +73,47 @@ describe("student web shared foundation integration", () => {
       ["rank", "ing"].join(""),
     ];
 
+    expect(courseLabels).toEqual(["Grade 7 English", "High School English", "High School Math"]);
+    expect(courseLabels.join(" ")).not.toContain(["Persona", "A"].join(" "));
+    expect(courseLabels.join(" ")).not.toContain(["Persona", "B"].join(" "));
+    expect(courseLabels.join(" ")).not.toContain(["Persona", "C"].join(" "));
     expect(parseRoute("/student/profile")).toEqual({ screen: "profile" });
     expect(routeToPath({ screen: "profile" })).toBe("/student/profile");
     expect(profile.identity).toMatchObject({
-      persona: "Persona A",
-      grade: "Grade 7",
+      course: "Grade 7 English",
       unit: "Unit 6",
+      unitTitle: "The Power of Plants",
       focus: "Vocabulary foundation",
+      preference: "Read aloud",
     });
     expect(profile.credits.map((credit) => credit.label)).toEqual(
       expect.arrayContaining(["Practice Credits", "Reflection Credits", "Vocabulary Builder", "Evidence Collector"]),
     );
-    expect(profile.reviewItems.map((item) => item.label)).toContain("Last Practice");
+    expect(profile.accuracy.map((item) => item.label)).toEqual(
+      expect.arrayContaining([
+        "Overall accuracy",
+        "Recent practice accuracy",
+        "Vocabulary accuracy",
+        "Reading/order accuracy",
+      ]),
+    );
+    expect(profile.reviewItems.map((item) => item.label)).toEqual(
+      expect.arrayContaining(["Needs Review", "Try Again", "Review Focus"]),
+    );
     expect(profile.abilities.map((ability) => ability.label)).toEqual(
-      expect.arrayContaining(["Vocabulary", "Reading Order", "Evidence Use", "Reflection", "Task Completion"]),
+      expect.arrayContaining([
+        "Vocabulary Understanding",
+        "Sentence Comprehension",
+        "Reading Sequence",
+        "Evidence Use",
+        "Reflection Quality",
+      ]),
     );
     expect(profile.thinkingSkills.map((skill) => skill.label)).toEqual(
       expect.arrayContaining(["Observe", "Compare", "Sequence", "Explain", "Reflect"]),
     );
-    expect(profile.strategies).toContain("Label first, explain next");
+    expect(profile.thinkingSkills.every((skill) => skill.level > 0)).toBe(true);
+    expect(profile.strategies).toContain("Read aloud");
     expect(profileCopy).not.toMatch(/\p{Script=Han}/u);
     blockedInternalCopy.forEach((copy) => {
       expect(profileCopy).not.toContain(copy);

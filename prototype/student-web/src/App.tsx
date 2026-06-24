@@ -28,12 +28,13 @@ import {
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   buildStudentExperience,
+  COURSE_OPTIONS,
   createStudentRuntime,
   markTaskCompleteAndUnlockNext,
   parseRoute,
   routeToPath,
-  STUDENT_IDS,
   submitMockTask,
+  type CourseId,
   type RouteState,
   type SafeTaskCard,
   type StepOverrideMap,
@@ -64,7 +65,8 @@ const plantTargets: Array<{ key: PlantLabelKey; label: string; helper: string }>
 
 export function App() {
   const runtimeRef = useRef(createStudentRuntime());
-  const [studentId, setStudentId] = useState<StudentId>("stu_persona_a");
+  const studentId: StudentId = "stu_persona_a";
+  const [courseId, setCourseId] = useState<CourseId>("grade7_english");
   const [route, setRoute] = useState<RouteState>(() => parseRoute(window.location.pathname));
   const [stepOverrides, setStepOverrides] = useState<StepOverrideMap>({});
   const [answers, setAnswers] = useState<Record<PlantLabelKey, string>>({
@@ -110,14 +112,6 @@ export function App() {
     setRoute(nextRoute);
   };
 
-  const changeStudent = (nextStudentId: StudentId) => {
-    setStudentId(nextStudentId);
-    setStepOverrides({});
-    setLastFeedback(undefined);
-    setReflection("");
-    navigate({ screen: "home" });
-  };
-
   const handleCompleteTask = (task: SafeTaskCard) => {
     if (!experience.activePath) {
       return;
@@ -160,7 +154,7 @@ export function App() {
           {route.screen === "task" ? (
             <TaskTopBar task={activeTask} experience={experience} navigate={navigate} />
           ) : (
-            <StudentHeader experience={experience} selectedStudentId={studentId} onStudentChange={changeStudent} />
+            <StudentHeader selectedCourseId={courseId} onCourseChange={setCourseId} />
           )}
         </div>
 
@@ -212,13 +206,11 @@ export function App() {
 }
 
 function StudentHeader({
-  experience,
-  selectedStudentId,
-  onStudentChange,
+  selectedCourseId,
+  onCourseChange,
 }: {
-  experience: StudentExperience;
-  selectedStudentId: StudentId;
-  onStudentChange: (studentId: StudentId) => void;
+  selectedCourseId: CourseId;
+  onCourseChange: (courseId: CourseId) => void;
 }) {
   return (
     <header className="student-header">
@@ -231,15 +223,15 @@ function StudentHeader({
           <span>Copilot Student</span>
         </div>
       </div>
-      <label className="persona-picker">
-        <span className="avatar" aria-hidden="true">
-          {experience.persona.label.at(-1)}
+      <label className="course-picker">
+        <span className="course-icon" aria-hidden="true">
+          <BookOpenCheck size={18} />
         </span>
-        <span className="sr-only">Choose student persona</span>
-        <select value={selectedStudentId} onChange={(event) => onStudentChange(event.target.value as StudentId)}>
-          {STUDENT_IDS.map((id) => (
-            <option key={id} value={id}>
-              {id.replace("stu_", "").replace("_", " ")}
+        <span className="sr-only">Choose course</span>
+        <select value={selectedCourseId} onChange={(event) => onCourseChange(event.target.value as CourseId)}>
+          {COURSE_OPTIONS.map((course) => (
+            <option key={course.id} value={course.id}>
+              {course.label}
             </option>
           ))}
         </select>
@@ -257,6 +249,7 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
       <section className="hero-panel">
         <div>
           <p className="eyebrow">Grade 7 English</p>
+          <span className="unit-badge">Unit 6</span>
           <h1>The Power of Plants</h1>
         </div>
         <PlantMiniScene />
@@ -264,9 +257,9 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
 
       <section className="summary-band">
         <div>
-          <span className="small-label">Current Persona</span>
-          <strong>{experience.student.pseudonymous_label}</strong>
-          <p>{personaFocusLabel(experience.student.persona_id)}</p>
+          <span className="small-label">Learning Focus</span>
+          <strong>{personaFocusLabel(experience.student.persona_id)}</strong>
+          <p>Plant vocabulary</p>
         </div>
         <div>
           <span className="small-label">Path Goal</span>
@@ -788,22 +781,24 @@ function ProfileScreen({ experience, navigate }: { experience: StudentExperience
     <div className="screen-stack profile-screen">
       <section className="profile-hero">
         <div className="profile-avatar" aria-hidden="true">
-          {profile.identity.persona.at(-1)}
+          <BookOpenCheck size={28} />
         </div>
         <div>
-          <span className="small-label">Student Profile</span>
-          <h1>{profile.identity.persona}</h1>
+          <span className="small-label">Learning Profile</span>
+          <h1>{profile.identity.course}</h1>
           <div className="chip-row compact-row">
-            <span className="chip">{profile.identity.grade}</span>
             <span className="chip">{profile.identity.unit}</span>
+            <span className="chip">{profile.identity.unitTitle}</span>
             <span className="chip">Mock profile</span>
           </div>
         </div>
       </section>
 
       <section className="profile-summary-grid" aria-label="Student summary">
-        <ProfileFact label="Focus" value={profile.identity.focus} />
-        <ProfileFact label="Preference" value={profile.identity.preference} />
+        <ProfileFact label="Course" value={profile.identity.course} />
+        <ProfileFact label="Unit Topic" value={profile.identity.unitTitle} />
+        <ProfileFact label="Learning Focus" value={profile.identity.focus} />
+        <ProfileFact label="Strategy Preference" value={profile.identity.preference} />
       </section>
 
       <section className="profile-panel">
@@ -818,6 +813,28 @@ function ProfileScreen({ experience, navigate }: { experience: StudentExperience
               <span>{credit.badge}</span>
               <small>{credit.detail}</small>
               <LevelBar level={credit.level} />
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="profile-panel">
+        <div className="section-title-row">
+          <div>
+            <h2>Past Accuracy</h2>
+            <span className="small-note">Mock progress</span>
+          </div>
+          <BarChart3 size={18} />
+        </div>
+        <div className="accuracy-grid">
+          {profile.accuracy.map((item) => (
+            <article key={item.label} className="accuracy-card">
+              <div>
+                <strong>{item.label}</strong>
+                <span>{item.value}%</span>
+              </div>
+              <LevelBar level={item.value} />
+              <small>{item.detail}</small>
             </article>
           ))}
         </div>
@@ -849,7 +866,7 @@ function ProfileScreen({ experience, navigate }: { experience: StudentExperience
 
       <section className="profile-panel">
         <div className="section-title-row">
-          <h2>Practice History</h2>
+          <h2>Review Collection</h2>
           <button className="text-button compact-link" onClick={() => navigate({ screen: "path", pathId })}>
             Path
           </button>
@@ -859,7 +876,10 @@ function ProfileScreen({ experience, navigate }: { experience: StudentExperience
             <article key={item.taskId} className="review-card">
               <span className="step-pill">{item.label}</span>
               <strong>{item.title}</strong>
-              <small>Review Focus: {item.focus}</small>
+              <small>{item.focus} · {item.lastResult}</small>
+              <button className="secondary-button compact-button" onClick={() => navigate({ screen: "task", taskId: item.taskId })}>
+                Review
+              </button>
             </article>
           ))}
         </div>
@@ -870,16 +890,19 @@ function ProfileScreen({ experience, navigate }: { experience: StudentExperience
           <h2>Thinking Skills</h2>
           <Brain size={18} />
         </div>
-        <div className="thinking-skill-grid">
-          {profile.thinkingSkills.map((skill) => (
-            <article key={skill.label} className="thinking-skill-card">
-              <div>
-                <strong>{skill.label}</strong>
-                <span className={`band ${bandClassName(skill.band)}`}>{skill.band}</span>
-              </div>
-              <small>{skill.next}</small>
-            </article>
-          ))}
+        <div className="thinking-profile-map">
+          <ThinkingRadar skills={profile.thinkingSkills} />
+          <div className="thinking-skill-grid">
+            {profile.thinkingSkills.map((skill) => (
+              <article key={skill.label} className="thinking-skill-card">
+                <div>
+                  <strong>{skill.label}</strong>
+                  <span className={`band ${bandClassName(skill.band)}`}>{skill.band}</span>
+                </div>
+                <small>{skill.next}</small>
+              </article>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -958,13 +981,50 @@ function AbilityRadar({ abilities }: { abilities: StudentProfileSummary["abiliti
 
 function shortAbilityLabel(label: string): string {
   const labels: Record<string, string> = {
-    Vocabulary: "Vocab",
-    "Reading Order": "Order",
+    "Vocabulary Understanding": "Vocab",
+    "Sentence Comprehension": "Sentence",
+    "Reading Sequence": "Sequence",
     "Evidence Use": "Evidence",
-    Reflection: "Reflect",
-    "Task Completion": "Tasks",
+    "Reflection Quality": "Reflect",
   };
   return labels[label] ?? label;
+}
+
+function ThinkingRadar({ skills }: { skills: StudentProfileSummary["thinkingSkills"] }) {
+  const center = 82;
+  const maxRadius = 58;
+  const points = skills.map((skill, index) => {
+    const angle = -Math.PI / 2 + (index * Math.PI * 2) / skills.length;
+    const radius = maxRadius * (skill.level / 100);
+    return {
+      label: skill.label,
+      x: center + Math.cos(angle) * radius,
+      y: center + Math.sin(angle) * radius,
+      labelX: center + Math.cos(angle) * 70,
+      labelY: center + Math.sin(angle) * 70,
+    };
+  });
+  const polygonPoints = points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+
+  return (
+    <svg className="thinking-radar" viewBox="0 0 164 164" role="img" aria-label="Thinking Skills visual profile">
+      {[22, 40, 58].map((radius) => (
+        <circle key={radius} cx={center} cy={center} r={radius} fill="none" stroke="#d9e2dc" strokeWidth="1" />
+      ))}
+      {points.map((point) => (
+        <line key={point.label} x1={center} y1={center} x2={point.labelX} y2={point.labelY} stroke="#d9e2dc" strokeWidth="1" />
+      ))}
+      <polygon points={polygonPoints} fill="rgba(47, 127, 184, 0.2)" stroke="#2f7fb8" strokeWidth="2" />
+      {points.map((point) => (
+        <g key={point.label}>
+          <circle cx={point.x} cy={point.y} r="3.2" fill="#2f7fb8" />
+          <text x={point.labelX} y={point.labelY} textAnchor="middle" dominantBaseline="central">
+            {point.label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
 }
 
 function ReflectionPanel({

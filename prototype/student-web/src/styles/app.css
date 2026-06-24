@@ -122,7 +122,8 @@ button:disabled {
 }
 
 .brand-mark,
-.avatar {
+.avatar,
+.course-icon {
   width: 36px;
   height: 36px;
   display: grid;
@@ -134,14 +135,14 @@ button:disabled {
   color: var(--accent);
 }
 
-.persona-picker {
+.course-picker {
   display: flex;
   align-items: center;
   gap: 8px;
 }
 
-.persona-picker select {
-  width: 106px;
+.course-picker select {
+  width: 154px;
   min-height: 36px;
   border: 1px solid transparent;
   border-radius: 6px;
@@ -227,6 +228,19 @@ button:disabled {
 
 .small-label {
   color: #52635e;
+}
+
+.unit-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  margin-top: 8px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #e5f3ef;
+  color: var(--accent-dark);
+  font-size: 0.76rem;
+  font-weight: 900;
 }
 
 .plant-mini-scene {
@@ -928,7 +942,8 @@ button:disabled {
   margin-top: 12px;
 }
 
-.credit-card {
+.credit-card,
+.accuracy-card {
   display: grid;
   gap: 4px;
   min-height: 112px;
@@ -939,24 +954,44 @@ button:disabled {
 }
 
 .credit-card strong,
+.accuracy-card strong,
 .ability-row strong,
 .review-card strong,
 .thinking-skill-card strong {
   color: #17342f;
 }
 
-.credit-card span {
+.credit-card span,
+.accuracy-card span {
   color: var(--accent-dark);
   font-size: 0.86rem;
   font-weight: 900;
 }
 
 .credit-card small,
+.accuracy-card small,
 .ability-row small,
 .review-card small,
 .thinking-skill-card small {
   color: var(--muted);
   line-height: 1.3;
+}
+
+.accuracy-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.accuracy-card {
+  min-height: 96px;
+}
+
+.accuracy-card > div {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
 }
 
 .level-bar {
@@ -1064,6 +1099,30 @@ button:disabled {
   width: fit-content;
 }
 
+.review-card .secondary-button {
+  justify-self: start;
+  margin-top: 2px;
+}
+
+.thinking-profile-map {
+  display: grid;
+  grid-template-columns: 164px 1fr;
+  gap: 12px;
+  align-items: center;
+  margin-top: 12px;
+}
+
+.thinking-radar {
+  width: 164px;
+  height: 164px;
+}
+
+.thinking-radar text {
+  fill: #40524d;
+  font-size: 0.55rem;
+  font-weight: 800;
+}
+
 .strategy-action-list {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
@@ -1161,6 +1220,14 @@ button:disabled {
     max-width: 180px;
     justify-self: end;
   }
+
+  .student-header {
+    gap: 8px;
+  }
+
+  .course-picker select {
+    width: 132px;
+  }
 }
 
 @media (max-width: 380px) {
@@ -1170,6 +1237,7 @@ button:disabled {
   .strategy-list,
   .profile-summary-grid,
   .credit-grid,
+  .accuracy-grid,
   .strategy-action-list {
     grid-template-columns: 1fr;
   }
@@ -1183,7 +1251,13 @@ button:disabled {
     justify-items: center;
   }
 
-  .ability-list {
+  .thinking-profile-map {
+    grid-template-columns: 1fr;
+    justify-items: center;
+  }
+
+  .ability-list,
+  .thinking-skill-grid {
     width: 100%;
   }
 }
