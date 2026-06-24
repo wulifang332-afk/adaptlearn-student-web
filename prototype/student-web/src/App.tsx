@@ -536,8 +536,8 @@ function PracticeStatePanel({
   const stateCopy: Record<PracticeState, { label: string; title: string; body: string }> = {
     ready: {
       label: "Ready",
-      title: task.responseFormat.includes("录音") ? "Media ready" : "Diagram ready",
-      body: task.responseFormat.includes("录音")
+      title: requiresAudioResponse(task) ? "Media ready" : "Diagram ready",
+      body: requiresAudioResponse(task)
         ? "Audio practice can start after permission."
         : "This task uses text and diagram input.",
     },
@@ -613,6 +613,11 @@ function PracticeStatePanel({
       </div>
     </section>
   );
+}
+
+function requiresAudioResponse(task: SafeTaskCard): boolean {
+  const response = `${task.responseFormat} ${task.taskType}`.toLowerCase();
+  return response.includes("audio") || response.includes("speaking") || response.includes("oral");
 }
 
 function FeedbackScreen({

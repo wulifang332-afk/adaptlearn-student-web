@@ -22,6 +22,15 @@ describe("student web shared foundation integration", () => {
     expect(experience.taskCards).toHaveLength(5);
   });
 
+  it("keeps the student-facing experience model English-only", () => {
+    const runtime = createStudentRuntime();
+    const experience = buildStudentExperience(runtime, "stu_persona_c");
+
+    expect(JSON.stringify(experience)).not.toMatch(/\p{Script=Han}/u);
+    expect(experience.activePath?.goal).toBe("Compare cultures and plan a short paragraph");
+    expect(experience.taskCards.map((card) => card.title)).toContain("Write a short paragraph about tea and family");
+  });
+
   it("filters non-deliverable learning paths from student task cards", () => {
     const runtime = createStudentRuntime();
     const path = structuredClone(runtime.api.fixture.learning_paths[0]);
