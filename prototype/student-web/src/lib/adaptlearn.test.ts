@@ -18,6 +18,7 @@ describe("student web shared foundation integration", () => {
     expect(experience.activePath?.studentExplanation).toBe("Ready path");
     expect(experience.activePath?.goalTags).toEqual(["Plant vocabulary", "Process order"]);
     expect(experience.simulationNotice).toBe("Prototype data");
+    expect(experience.studentProfile.identity.focus).toBe("Vocabulary foundation");
     expect(JSON.stringify(experience)).not.toContain("teacher_text");
     expect(JSON.stringify(experience)).not.toContain("mock-rule-v0");
     expect(experience.taskCards).toHaveLength(5);
@@ -57,6 +58,44 @@ describe("student web shared foundation integration", () => {
     });
   });
 
+  it("builds a student-safe profile model and route", () => {
+    const runtime = createStudentRuntime();
+    const experience = buildStudentExperience(runtime, "stu_persona_a");
+    const profile = experience.studentProfile;
+    const profileCopy = JSON.stringify(profile);
+    const blockedInternalCopy = [
+      ["Decision", "Trace"].join(""),
+      ["teacher", "audit"].join(" "),
+      ["rule", "weight"].join(" "),
+      ["candidate", "exclusion"].join(" "),
+      ["rank", "ing"].join(""),
+    ];
+
+    expect(parseRoute("/student/profile")).toEqual({ screen: "profile" });
+    expect(routeToPath({ screen: "profile" })).toBe("/student/profile");
+    expect(profile.identity).toMatchObject({
+      persona: "Persona A",
+      grade: "Grade 7",
+      unit: "Unit 6",
+      focus: "Vocabulary foundation",
+    });
+    expect(profile.credits.map((credit) => credit.label)).toEqual(
+      expect.arrayContaining(["Practice Credits", "Reflection Credits", "Vocabulary Builder", "Evidence Collector"]),
+    );
+    expect(profile.reviewItems.map((item) => item.label)).toContain("Last Practice");
+    expect(profile.abilities.map((ability) => ability.label)).toEqual(
+      expect.arrayContaining(["Vocabulary", "Reading Order", "Evidence Use", "Reflection", "Task Completion"]),
+    );
+    expect(profile.thinkingSkills.map((skill) => skill.label)).toEqual(
+      expect.arrayContaining(["Observe", "Compare", "Sequence", "Explain", "Reflect"]),
+    );
+    expect(profile.strategies).toContain("Label first, explain next");
+    expect(profileCopy).not.toMatch(/\p{Script=Han}/u);
+    blockedInternalCopy.forEach((copy) => {
+      expect(profileCopy).not.toContain(copy);
+    });
+  });
+
   it("filters non-deliverable learning paths from student task cards", () => {
     const runtime = createStudentRuntime();
     const path = structuredClone(runtime.api.fixture.learning_paths[0]);
@@ -79,7 +118,9 @@ describe("student web shared foundation integration", () => {
     expect(parseRoute("/student/tasks/UI01")).toEqual({ screen: "task", taskId: "UI01" });
     expect(parseRoute("/student/progress")).toEqual({ screen: "growth" });
     expect(parseRoute("/student/growth")).toEqual({ screen: "growth" });
+    expect(parseRoute("/student/profile")).toEqual({ screen: "profile" });
     expect(routeToPath({ screen: "feedback", taskId: "UI01" })).toBe("/student/tasks/UI01/feedback");
     expect(routeToPath({ screen: "growth" })).toBe("/student/progress");
+    expect(routeToPath({ screen: "profile" })).toBe("/student/profile");
   });
 });

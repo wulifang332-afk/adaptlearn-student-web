@@ -1,7 +1,10 @@
 import {
   ArrowLeft,
+  Award,
   BarChart3,
+  BadgeCheck,
   BookOpenCheck,
+  Brain,
   Check,
   ChevronRight,
   ClipboardCheck,
@@ -18,6 +21,7 @@ import {
   Route,
   Send,
   Sprout,
+  Target,
   Trophy,
   UserRound,
 } from "lucide-react";
@@ -34,6 +38,7 @@ import {
   type SafeTaskCard,
   type StepOverrideMap,
   type StudentExperience,
+  type StudentProfileSummary,
   type StudentId,
 } from "./lib/adaptlearn";
 
@@ -197,6 +202,7 @@ export function App() {
               setDifficulty={setDifficulty}
             />
           )}
+          {route.screen === "profile" && <ProfileScreen experience={experience} navigate={navigate} />}
         </section>
 
         <BottomNav route={route} experience={experience} navigate={navigate} />
@@ -774,6 +780,193 @@ function ProgressScreen({
   );
 }
 
+function ProfileScreen({ experience, navigate }: { experience: StudentExperience; navigate: (route: RouteState) => void }) {
+  const profile = experience.studentProfile;
+  const pathId = experience.activePath?.pathId ?? "PTH01";
+
+  return (
+    <div className="screen-stack profile-screen">
+      <section className="profile-hero">
+        <div className="profile-avatar" aria-hidden="true">
+          {profile.identity.persona.at(-1)}
+        </div>
+        <div>
+          <span className="small-label">Student Profile</span>
+          <h1>{profile.identity.persona}</h1>
+          <div className="chip-row compact-row">
+            <span className="chip">{profile.identity.grade}</span>
+            <span className="chip">{profile.identity.unit}</span>
+            <span className="chip">Mock profile</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="profile-summary-grid" aria-label="Student summary">
+        <ProfileFact label="Focus" value={profile.identity.focus} />
+        <ProfileFact label="Preference" value={profile.identity.preference} />
+      </section>
+
+      <section className="profile-panel">
+        <div className="section-title-row">
+          <h2>Learning Credits</h2>
+          <Award size={18} />
+        </div>
+        <div className="credit-grid">
+          {profile.credits.map((credit) => (
+            <article key={credit.label} className="credit-card">
+              <strong>{credit.label}</strong>
+              <span>{credit.badge}</span>
+              <small>{credit.detail}</small>
+              <LevelBar level={credit.level} />
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="profile-panel ability-panel">
+        <div className="section-title-row">
+          <div>
+            <h2>Ability Profile</h2>
+            <span className="small-note">Updated today</span>
+          </div>
+          <BadgeCheck size={18} />
+        </div>
+        <div className="ability-map">
+          <AbilityRadar abilities={profile.abilities} />
+          <div className="ability-list">
+            {profile.abilities.map((ability) => (
+              <article key={ability.label} className="ability-row">
+                <div>
+                  <strong>{ability.label}</strong>
+                  <small>{ability.note}</small>
+                </div>
+                <span className={`band ${bandClassName(ability.band)}`}>{ability.band}</span>
+              </article>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      <section className="profile-panel">
+        <div className="section-title-row">
+          <h2>Practice History</h2>
+          <button className="text-button compact-link" onClick={() => navigate({ screen: "path", pathId })}>
+            Path
+          </button>
+        </div>
+        <div className="review-list">
+          {profile.reviewItems.map((item) => (
+            <article key={item.taskId} className="review-card">
+              <span className="step-pill">{item.label}</span>
+              <strong>{item.title}</strong>
+              <small>Review Focus: {item.focus}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="profile-panel">
+        <div className="section-title-row">
+          <h2>Thinking Skills</h2>
+          <Brain size={18} />
+        </div>
+        <div className="thinking-skill-grid">
+          {profile.thinkingSkills.map((skill) => (
+            <article key={skill.label} className="thinking-skill-card">
+              <div>
+                <strong>{skill.label}</strong>
+                <span className={`band ${bandClassName(skill.band)}`}>{skill.band}</span>
+              </div>
+              <small>{skill.next}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="profile-panel">
+        <div className="section-title-row">
+          <h2>Learning Strategies</h2>
+          <Target size={18} />
+        </div>
+        <div className="strategy-action-list">
+          {profile.strategies.map((strategy) => (
+            <span key={strategy}>
+              <Leaf size={15} />
+              {strategy}
+            </span>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
+function ProfileFact({ label, value }: { label: string; value: string }) {
+  return (
+    <article>
+      <span className="small-label">{label}</span>
+      <strong>{value}</strong>
+    </article>
+  );
+}
+
+function LevelBar({ level }: { level: number }) {
+  return (
+    <div className="level-bar" aria-hidden="true">
+      <span style={{ width: `${level}%` }} />
+    </div>
+  );
+}
+
+function AbilityRadar({ abilities }: { abilities: StudentProfileSummary["abilities"] }) {
+  const center = 90;
+  const maxRadius = 64;
+  const points = abilities.map((ability, index) => {
+    const angle = -Math.PI / 2 + (index * Math.PI * 2) / abilities.length;
+    const radius = maxRadius * (ability.level / 100);
+    return {
+      label: ability.label,
+      x: center + Math.cos(angle) * radius,
+      y: center + Math.sin(angle) * radius,
+      labelX: center + Math.cos(angle) * 77,
+      labelY: center + Math.sin(angle) * 77,
+    };
+  });
+  const polygonPoints = points.map((point) => `${point.x.toFixed(1)},${point.y.toFixed(1)}`).join(" ");
+  const gridRings = [24, 44, 64];
+
+  return (
+    <svg className="ability-radar" viewBox="0 0 180 180" role="img" aria-label="Ability profile map">
+      {gridRings.map((radius) => (
+        <circle key={radius} cx={center} cy={center} r={radius} fill="none" stroke="#d9e2dc" strokeWidth="1" />
+      ))}
+      {points.map((point) => (
+        <line key={point.label} x1={center} y1={center} x2={point.labelX} y2={point.labelY} stroke="#d9e2dc" strokeWidth="1" />
+      ))}
+      <polygon points={polygonPoints} fill="rgba(22, 132, 95, 0.24)" stroke="#16845f" strokeWidth="2" />
+      {points.map((point) => (
+        <g key={point.label}>
+          <circle cx={point.x} cy={point.y} r="3.4" fill="#16845f" />
+          <text x={point.labelX} y={point.labelY} textAnchor="middle" dominantBaseline="central">
+            {shortAbilityLabel(point.label)}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function shortAbilityLabel(label: string): string {
+  const labels: Record<string, string> = {
+    Vocabulary: "Vocab",
+    "Reading Order": "Order",
+    "Evidence Use": "Evidence",
+    Reflection: "Reflect",
+    "Task Completion": "Tasks",
+  };
+  return labels[label] ?? label;
+}
+
 function ReflectionPanel({
   reflection,
   setReflection,
@@ -858,7 +1051,7 @@ function BottomNav({
     { label: "Home", icon: Home, route: { screen: "home" } as RouteState, selected: route.screen === "home" },
     { label: "Path", icon: Route, route: { screen: "path", pathId } as RouteState, selected: route.screen === "path" },
     { label: "Progress", icon: BarChart3, route: { screen: "growth" } as RouteState, selected: route.screen === "growth" },
-    { label: "Profile", icon: UserRound, route: { screen: "home" } as RouteState, selected: false },
+    { label: "Profile", icon: UserRound, route: { screen: "profile" } as RouteState, selected: route.screen === "profile" },
   ];
 
   return (
@@ -934,6 +1127,16 @@ function formatTaskStatus(status: SafeTaskCard["status"]): string {
     return "Review";
   }
   return "Ready";
+}
+
+function bandClassName(band: StudentProfileSummary["abilities"][number]["band"]): string {
+  if (band === "Strong") {
+    return "strong";
+  }
+  if (band === "Needs Practice") {
+    return "needs-practice";
+  }
+  return "growing";
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {

@@ -24,7 +24,8 @@ export type RouteState =
   | { screen: "path"; pathId: string }
   | { screen: "task"; taskId: string }
   | { screen: "feedback"; taskId: string }
-  | { screen: "growth" };
+  | { screen: "growth" }
+  | { screen: "profile" };
 
 export type StepOverrideMap = Record<string, PathStep["status"]>;
 
@@ -68,6 +69,42 @@ export type SafeProgressSummary = {
   evidenceCoverageLabel: string;
 };
 
+export type AbilityBand = "Strong" | "Growing" | "Needs Practice";
+
+export type StudentProfileSummary = {
+  identity: {
+    persona: string;
+    grade: string;
+    unit: string;
+    focus: string;
+    preference: string;
+  };
+  credits: Array<{
+    label: string;
+    badge: string;
+    detail: string;
+    level: number;
+  }>;
+  reviewItems: Array<{
+    taskId: string;
+    title: string;
+    label: "Last Practice" | "Try Again" | "Review Focus";
+    focus: string;
+  }>;
+  abilities: Array<{
+    label: string;
+    band: AbilityBand;
+    level: number;
+    note: string;
+  }>;
+  thinkingSkills: Array<{
+    label: string;
+    band: AbilityBand;
+    next: string;
+  }>;
+  strategies: string[];
+};
+
 export type StudentExperience = {
   student: Student;
   persona: Persona;
@@ -89,6 +126,7 @@ export type StudentExperience = {
   recommendedTask: SafeTaskCard | undefined;
   taskCards: SafeTaskCard[];
   progress: SafeProgressSummary;
+  studentProfile: StudentProfileSummary;
   simulationNotice: string;
   screenRoutes: typeof SCREEN_ROUTES;
 };
@@ -102,6 +140,10 @@ export const createStudentRuntime = (): Runtime => ({
 });
 
 export const parseRoute = (pathname: string): RouteState => {
+  if (pathname === "/student/profile") {
+    return { screen: "profile" };
+  }
+
   const pathMatch = pathname.match(/^\/student\/path\/([^/]+)$/);
   if (pathMatch) {
     return { screen: "path", pathId: decodeURIComponent(pathMatch[1]) };
@@ -134,6 +176,8 @@ export const routeToPath = (route: RouteState): string => {
       return `/student/tasks/${route.taskId}/feedback`;
     case "growth":
       return "/student/progress";
+    case "profile":
+      return "/student/profile";
     case "home":
     default:
       return "/student";
@@ -157,6 +201,7 @@ export const buildStudentExperience = (
   }
 
   const taskCards = buildTaskCards(runtime, activePath, stepOverrides);
+  const submissions = runtime.api.listSubmissions(student.student_id).data ?? [];
   const recommendedTask =
     taskCards.find((card) => card.status === "IN_PROGRESS") ??
     taskCards.find((card) => card.status === "AVAILABLE") ??
@@ -182,6 +227,7 @@ export const buildStudentExperience = (
     recommendedTask,
     taskCards,
     progress: buildSafeProgressSummary(profile, runtime.api.fixture.knowledge_nodes, taskCards),
+    studentProfile: buildStudentProfileSummary(student, profile, taskCards, submissions),
     simulationNotice: "Prototype data",
     screenRoutes: SCREEN_ROUTES,
   };
@@ -292,6 +338,181 @@ const buildSafeProgressSummary = (
     thinking: summarizeThinking(profile.thinking_profile),
     evidenceCoverageLabel: coverageToLabel(profile.thinking_profile.evidence_coverage),
   };
+};
+
+const buildStudentProfileSummary = (
+  student: Student,
+  profile: LearnerProfile,
+  taskCards: SafeTaskCard[],
+  submissions: StudentSubmission[],
+): StudentProfileSummary => {
+  const completedPracticeCount = submissions.filter((submission) =>
+    ["COMPLETED", "RECEIVED", "REVIEW_PENDING"].includes(submission.status),
+  ).length;
+  const evidenceCount = submissions.reduce((total, submission) => total + submission.evidence_ids.length, 0);
+  const completedTaskCount = Math.max(
+    taskCards.filter((task) => task.status === "COMPLETED").length,
+    submissions.filter((submission) => submission.status === "COMPLETED").length,
+  );
+  const totalTaskCount = Math.max(taskCards.length, 1);
+  const reflectionCount = taskCards.flatMap((task) => task.learningStrategies).filter((strategy) =>
+    /reflection|self-monitoring|check|revise/i.test(strategy),
+  ).length;
+  const abilityItems = buildAbilityItems(profile, completedTaskCount, totalTaskCount);
+
+  return {
+    identity: {
+      persona: student.pseudonymous_label,
+      grade: "Grade 7",
+      unit: "Unit 6",
+      focus: personaFocusLabel(student.persona_id),
+      preference: personaPreferenceLabel(student.persona_id),
+    },
+    credits: [
+      {
+        label: "Practice Credits",
+        badge: `${Math.max(completedPracticeCount, 1)} earned`,
+        detail: "Recent Unit 6 practice",
+        level: clampLevel(34 + completedPracticeCount * 18),
+      },
+      {
+        label: "Reflection Credits",
+        badge: `${Math.max(reflectionCount, 1)} ready`,
+        detail: "Review habits",
+        level: clampLevel(36 + reflectionCount * 12),
+      },
+      {
+        label: "Vocabulary Builder",
+        badge: abilityItems[0]?.band ?? "Growing",
+        detail: "Plant words",
+        level: abilityItems[0]?.level ?? 50,
+      },
+      {
+        label: "Evidence Collector",
+        badge: evidenceCount > 0 ? "Started" : "Ready",
+        detail: "Use proof words",
+        level: clampLevel(42 + evidenceCount * 18),
+      },
+    ],
+    reviewItems: taskCards.slice(0, 3).map((task, index) => {
+      const hasSubmission = submissions.some((submission) => submission.task_id === task.taskId);
+      return {
+        taskId: task.taskId,
+        title: task.title,
+        label: hasSubmission ? "Last Practice" : index === 0 ? "Try Again" : "Review Focus",
+        focus: task.nodeNames[0] ?? "Unit 6",
+      };
+    }),
+    abilities: abilityItems,
+    thinkingSkills: buildThinkingSkills(profile),
+    strategies: [
+      "Read aloud",
+      "Label first, explain next",
+      "Use evidence words",
+      "Check sequence words",
+      "Review key plant vocabulary",
+    ],
+  };
+};
+
+const buildAbilityItems = (
+  profile: LearnerProfile,
+  completedTaskCount: number,
+  totalTaskCount: number,
+): StudentProfileSummary["abilities"] => [
+  {
+    label: "Vocabulary",
+    band: bandFromLevel(averageMastery(profile, ["VOC01", "VOC02", "VOC03", "VOC04"])),
+    level: averageMastery(profile, ["VOC01", "VOC02", "VOC03", "VOC04"]),
+    note: "Plant words",
+  },
+  {
+    label: "Reading Order",
+    band: bandFromLevel(averageMastery(profile, ["DS01", "SR04", "DS09"])),
+    level: averageMastery(profile, ["DS01", "SR04", "DS09"]),
+    note: "Process steps",
+  },
+  {
+    label: "Evidence Use",
+    band: bandFromLevel(profile.thinking_profile.evidence_coverage * 100),
+    level: clampLevel(profile.thinking_profile.evidence_coverage * 100),
+    note: "Proof words",
+  },
+  {
+    label: "Reflection",
+    band: bandFromLevel(averageMastery(profile, ["SW01", "SW03", "SW06"])),
+    level: averageMastery(profile, ["SW01", "SW03", "SW06"]),
+    note: "Check work",
+  },
+  {
+    label: "Task Completion",
+    band: bandFromLevel((completedTaskCount / totalTaskCount) * 100),
+    level: clampLevel((completedTaskCount / totalTaskCount) * 100),
+    note: "Practice path",
+  },
+];
+
+const buildThinkingSkills = (profile: LearnerProfile): StudentProfileSummary["thinkingSkills"] => [
+  {
+    label: "Observe",
+    band: bandFromThinkingLevel(profile.thinking_profile.observation_discrimination),
+    next: "Name what you see.",
+  },
+  {
+    label: "Compare",
+    band: bandFromLevel(averageMastery(profile, ["VOC14", "DS08", "CU06"])),
+    next: "Find same and different.",
+  },
+  {
+    label: "Sequence",
+    band: bandFromLevel(averageMastery(profile, ["DS01", "SR04"])),
+    next: "Use first, next, finally.",
+  },
+  {
+    label: "Explain",
+    band: bandFromThinkingLevel(profile.thinking_profile.induction_inference),
+    next: "Add one reason.",
+  },
+  {
+    label: "Reflect",
+    band: bandFromLevel(averageMastery(profile, ["SW06", "LS10", "LS11"])),
+    next: "Check one answer.",
+  },
+];
+
+const averageMastery = (profile: LearnerProfile, nodeIds: string[]): number => {
+  const matchingStates = profile.bkt_states.filter((state) => nodeIds.includes(state.node_id));
+  if (matchingStates.length === 0) {
+    return 48;
+  }
+  const average =
+    matchingStates.reduce((total, state) => total + state.mastery_probability, 0) / matchingStates.length;
+  return clampLevel(average * 100);
+};
+
+const clampLevel = (value: number): number => Math.min(92, Math.max(24, Math.round(value)));
+
+const bandFromLevel = (level: number): AbilityBand => {
+  if (level >= 66) {
+    return "Strong";
+  }
+  if (level >= 48) {
+    return "Growing";
+  }
+  return "Needs Practice";
+};
+
+const bandFromThinkingLevel = (value: ThinkingQualityProfile[keyof ThinkingQualityProfile]): AbilityBand => {
+  if (value === "EVIDENCE_INSUFFICIENT") {
+    return "Needs Practice";
+  }
+  if (value === "T2" || value === "T3") {
+    return "Strong";
+  }
+  if (value === "T1") {
+    return "Growing";
+  }
+  return "Needs Practice";
 };
 
 const masteryToFriendlyLabel = (value: number): "Needs practice" | "Growing" | "Steady" => {
@@ -406,6 +627,32 @@ const PATH_STUDENT_EXPLANATIONS: Record<string, string> = {
   PTH01: "Ready path",
   PTH03: "Reading path",
   PTH05: "Writing path",
+};
+
+const personaFocusLabel = (personaId: string): string => {
+  if (personaId === "persona_a") {
+    return "Vocabulary foundation";
+  }
+  if (personaId === "persona_b") {
+    return "Reading support";
+  }
+  if (personaId === "persona_c") {
+    return "Writing stretch";
+  }
+  return "Unit 6 focus";
+};
+
+const personaPreferenceLabel = (personaId: string): string => {
+  if (personaId === "persona_a") {
+    return "Label first, explain next";
+  }
+  if (personaId === "persona_b") {
+    return "Use evidence words";
+  }
+  if (personaId === "persona_c") {
+    return "Plan, write, revise";
+  }
+  return "Short focused practice";
 };
 
 const TASK_TITLES: Record<string, string> = {
