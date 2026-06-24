@@ -1,4 +1,5 @@
 import {
+  DecisionTraceSchema,
   FLOW_IDS,
   FLOW_SCREEN_MAP,
   GUARDRAILS,
@@ -122,6 +123,32 @@ for (const status of ["REVIEW", "BLOCK", "REPLAN"] as const) {
   assert(!isLearningPathDeliverable(invalidPath), `${status} path must not be deliverable`);
   assert(!LearningPathSchema.safeParse(invalidPath).success, `PUBLISHED + ${status} must fail schema`);
 }
+
+const baseDecisionTrace = {
+  trace_id: "trace_contract_reason",
+  actor_user_id: "usr_teacher_01",
+  action: "APPROVE" as const,
+  reason_required: false,
+  before_snapshot_ref: "learning_path:PTH01:v1",
+  created_at: "2026-06-23T04:30:00.000Z",
+};
+assert(
+  !DecisionTraceSchema.safeParse({ ...baseDecisionTrace, action: "OVERRIDE" }).success,
+  "OVERRIDE DecisionTrace must require reason_text",
+);
+assert(
+  !DecisionTraceSchema.safeParse({ ...baseDecisionTrace, reason_required: true }).success,
+  "reason_required DecisionTrace must require reason_text",
+);
+assert(
+  DecisionTraceSchema.safeParse({
+    ...baseDecisionTrace,
+    action: "OVERRIDE",
+    reason_required: true,
+    reason_text: "Teacher override reason.",
+  }).success,
+  "DecisionTrace with required reason_text must pass",
+);
 
 console.log("Contract validation passed");
 console.log(

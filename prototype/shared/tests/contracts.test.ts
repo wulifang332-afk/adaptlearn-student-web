@@ -1,6 +1,7 @@
 import { describe, it } from "node:test";
 import assert from "node:assert/strict";
 import {
+  DecisionTraceSchema,
   FLOW_IDS,
   LearningPathSchema,
   MOCK_SIMULATION_NOTICE,
@@ -25,6 +26,15 @@ const clonedFixtureWithVerifierStatus = (status: "REVIEW" | "BLOCK" | "REPLAN") 
   };
   return fixture;
 };
+
+const baseDecisionTrace = {
+  trace_id: "trace_test_reason",
+  actor_user_id: "usr_teacher_01",
+  action: "APPROVE",
+  reason_required: false,
+  before_snapshot_ref: "learning_path:PTH01:v1",
+  created_at: "2026-06-23T04:30:00.000Z",
+} as const;
 
 describe("shared foundation contracts", () => {
   it("keeps canonical screen and flow IDs", () => {
@@ -145,6 +155,50 @@ describe("shared foundation contracts", () => {
     assert.equal(modify.data.action, "MODIFY");
     assert.equal(modify.data.reason_required, true);
     assert.equal(modify.data.reason_text, "shorten to fit class time");
+  });
+
+  it("enforces DecisionTrace reason_text at runtime", () => {
+    assert.equal(
+      DecisionTraceSchema.safeParse({
+        ...baseDecisionTrace,
+        action: "OVERRIDE",
+      }).success,
+      false,
+    );
+
+    assert.equal(
+      DecisionTraceSchema.safeParse({
+        ...baseDecisionTrace,
+        action: "OVERRIDE",
+        reason_text: "   ",
+      }).success,
+      false,
+    );
+
+    assert.equal(
+      DecisionTraceSchema.safeParse({
+        ...baseDecisionTrace,
+        reason_required: true,
+      }).success,
+      false,
+    );
+
+    assert.equal(
+      DecisionTraceSchema.safeParse({
+        ...baseDecisionTrace,
+        reason_required: true,
+        reason_text: "   ",
+      }).success,
+      false,
+    );
+
+    const parsed = DecisionTraceSchema.parse({
+      ...baseDecisionTrace,
+      action: "OVERRIDE",
+      reason_required: true,
+      reason_text: " teacher changed task order ",
+    });
+    assert.equal(parsed.reason_text, "teacher changed task order");
   });
 
   it("does not deliver REVIEW, BLOCK, or REPLAN verifier paths", () => {

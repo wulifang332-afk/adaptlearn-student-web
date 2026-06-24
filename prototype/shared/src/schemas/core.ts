@@ -330,19 +330,29 @@ export const MediaUploadSchema = z.object({
   resume_token: z.string().min(1).optional(),
 });
 
-export const DecisionTraceSchema = z.object({
-  trace_id: z.string().min(1),
-  actor_user_id: z.string().min(1),
-  action: DecisionTraceActionSchema,
-  reason_required: z.boolean(),
-  reason_text: z.string().min(1).optional(),
-  before_snapshot_ref: z.string().min(1),
-  after_snapshot_ref: z.string().min(1).optional(),
-  rule_version: z.string().min(1).optional(),
-  lint_version: z.string().min(1).optional(),
-  verifier_version: z.string().min(1).optional(),
-  created_at: z.string().datetime(),
-});
+export const DecisionTraceSchema = z
+  .object({
+    trace_id: z.string().min(1),
+    actor_user_id: z.string().min(1),
+    action: DecisionTraceActionSchema,
+    reason_required: z.boolean(),
+    reason_text: z.string().trim().min(1).optional(),
+    before_snapshot_ref: z.string().min(1),
+    after_snapshot_ref: z.string().min(1).optional(),
+    rule_version: z.string().min(1).optional(),
+    lint_version: z.string().min(1).optional(),
+    verifier_version: z.string().min(1).optional(),
+    created_at: z.string().datetime(),
+  })
+  .superRefine((trace, context) => {
+    if ((trace.action === "OVERRIDE" || trace.reason_required) && !trace.reason_text) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["reason_text"],
+        message: "DecisionTrace reason_text is required for OVERRIDE or reason_required actions",
+      });
+    }
+  });
 
 export const TeacherDecisionInputSchema = z
   .object({
