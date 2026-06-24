@@ -20,7 +20,6 @@ import {
   Sprout,
   Trophy,
   UserRound,
-  WifiOff,
 } from "lucide-react";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
@@ -166,7 +165,6 @@ export function App() {
           {route.screen === "task" && activeTask && (
             <TaskScreen
               task={activeTask}
-              experience={experience}
               answers={answers}
               setAnswers={setAnswers}
               showHint={showHint}
@@ -254,23 +252,24 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
         <div>
           <p className="eyebrow">Grade 7 English</p>
           <h1>The Power of Plants</h1>
-          <p>Today starts with a short Unit 6 practice path matched to {experience.persona.label}.</p>
         </div>
         <PlantMiniScene />
       </section>
-
-      <SimulationNotice notice={experience.simulationNotice} />
 
       <section className="summary-band">
         <div>
           <span className="small-label">Current Persona</span>
           <strong>{experience.student.pseudonymous_label}</strong>
-          <p>{experience.persona.profile}</p>
+          <p>{personaFocusLabel(experience.student.persona_id)}</p>
         </div>
         <div>
           <span className="small-label">Path Goal</span>
           <strong>{path?.goal ?? "No path"}</strong>
-          <p>{path?.studentExplanation}</p>
+          <div className="chip-row compact-row">
+            {path?.goalTags.map((tag) => (
+              <span key={tag} className="chip">{tag}</span>
+            ))}
+          </div>
         </div>
       </section>
 
@@ -288,7 +287,7 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
           <ProgressRail completed={path.completedCount} total={path.totalCount} />
           <div className="path-meta-grid">
             <span><Clock3 size={16} /> {path.totalMinutes} min</span>
-            <span><BookOpenCheck size={16} /> {path.status.toLowerCase().replace("_", " ")}</span>
+            <span><BookOpenCheck size={16} /> {formatPathStatus(path.status)}</span>
             <span><Network size={16} /> Offline ready</span>
           </div>
         </section>
@@ -298,7 +297,7 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
         <section className="task-feature">
           <div className="section-title-row">
             <div>
-              <span className="small-label">Today Recommended Task</span>
+              <span className="small-label">Today's Task</span>
               <h2>{task.title}</h2>
             </div>
             <span className="step-pill">Step {task.stepNo}</span>
@@ -306,9 +305,8 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
           <div className="task-feature-body">
             <PlantCardArt />
             <div>
-              <p>{task.prompt}</p>
               <div className="chip-row">
-                <span className="chip">Bloom: {task.bloom}</span>
+                <span className="chip">{task.bloom}</span>
                 <span className="chip">{task.minutes} min</span>
                 <span className="chip">{task.riskLabel}</span>
               </div>
@@ -318,20 +316,12 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
                 disabled={!task.isActionable}
               >
                 <Leaf size={18} />
-                Start task
+                Start
               </button>
             </div>
           </div>
         </section>
       )}
-
-      <section className="state-strip">
-        <WifiOff size={18} />
-        <div>
-          <strong>Offline queue is visible</strong>
-          <span>Audio draft for a later speaking task is queued locally and can retry after reconnect.</span>
-        </div>
-      </section>
     </div>
   );
 }
@@ -348,14 +338,13 @@ function PathScreen({ experience, navigate }: { experience: StudentExperience; n
       <section className="path-intro">
         <span className="small-label">Unit 6 Learning Path</span>
         <h1>{path.goal}</h1>
-        <p>{path.studentExplanation}</p>
         <div className="path-meta-grid">
           <span><Clock3 size={16} /> {path.totalMinutes} min</span>
           <span><ClipboardCheck size={16} /> {path.totalCount} tasks</span>
-          <span><Check size={16} /> Deliverable</span>
+          <span><Check size={16} /> {formatPathStatus(path.status)}</span>
+          <span>Prototype</span>
         </div>
       </section>
-      <SimulationNotice notice={experience.simulationNotice} />
       <section className="timeline" aria-label="Learning path task timeline">
         {experience.taskCards.map((task) => (
           <PathTaskCard key={task.taskId} task={task} navigate={navigate} />
@@ -380,9 +369,10 @@ function PathTaskCard({ task, navigate }: { task: SafeTaskCard; navigate: (route
           </div>
           <StatusPill status={task.status} />
         </div>
-        <p>{task.studentReason}</p>
         <div className="chip-row">
-          <span className="chip">Bloom: {task.bloom}</span>
+          <span className="chip">Step {task.stepNo}</span>
+          <span className="chip">{task.nodeNames[0] ?? "Vocabulary"}</span>
+          <span className="chip">{task.bloom}</span>
           <span className="chip">{task.taskType}</span>
           <span className="chip">{task.minutes} min</span>
         </div>
@@ -397,7 +387,7 @@ function PathTaskCard({ task, navigate }: { task: SafeTaskCard; navigate: (route
           onClick={() => navigate({ screen: "task", taskId: task.taskId })}
         >
           {isLocked ? <LockKeyhole size={17} /> : <ChevronRight size={17} />}
-          {isLocked ? "Locked for now" : task.status === "COMPLETED" ? "Review task" : "Open task"}
+          {isLocked ? "Locked" : task.status === "COMPLETED" ? "Review" : "Open"}
         </button>
       </div>
     </article>
@@ -406,7 +396,6 @@ function PathTaskCard({ task, navigate }: { task: SafeTaskCard; navigate: (route
 
 function TaskScreen({
   task,
-  experience,
   answers,
   setAnswers,
   showHint,
@@ -418,7 +407,6 @@ function TaskScreen({
   onComplete,
 }: {
   task: SafeTaskCard;
-  experience: StudentExperience;
   answers: Record<PlantLabelKey, string>;
   setAnswers: (answers: Record<PlantLabelKey, string>) => void;
   showHint: boolean;
@@ -435,13 +423,14 @@ function TaskScreen({
 
   return (
     <div className="screen-stack task-screen">
-      <SimulationNotice notice={experience.simulationNotice} />
+      <SimulationNotice />
       <section className="task-prompt">
         <span className="small-label">{task.module} · {task.taskType}</span>
         <h1>{task.title}</h1>
         <p>{task.prompt}</p>
         <div className="chip-row">
-          <span className="chip">Bloom: {task.bloom}</span>
+          <span className="chip">Step {task.stepNo}</span>
+          <span className="chip">{task.bloom}</span>
           <span className="chip">{task.responseFormat}</span>
           <span className="chip">{task.riskLabel}</span>
         </div>
@@ -488,13 +477,12 @@ function TaskScreen({
           </div>
           {showHint && (
             <div className="hint-box">
-              Start with position: roots are under soil, the stem supports the plant, leaves are flat and green,
-              and seeds can grow into a new plant.
+              Position helps: roots below, stem in the middle, leaves on the sides, seed in the soil.
             </div>
           )}
           <div className="feedback-meter">
             <span>{answeredCount} of {plantTargets.length} labels selected</span>
-            <span>{correctCount} match the fixed answer key</span>
+            <span>{correctCount} match</span>
           </div>
         </section>
       ) : (
@@ -537,29 +525,27 @@ function PracticeStatePanel({
     ready: {
       label: "Ready",
       title: requiresAudioResponse(task) ? "Media ready" : "Diagram ready",
-      body: requiresAudioResponse(task)
-        ? "Audio practice can start after permission."
-        : "This task uses text and diagram input.",
+      body: requiresAudioResponse(task) ? "Ask for mic permission." : "Text + diagram input.",
     },
     "mic-denied": {
       label: "Mic denied",
       title: "Microphone permission denied",
-      body: "Use the text alternative or ask to retry permission before recording.",
+      body: "Use text or retry mic.",
     },
     recording: {
       label: "Recording",
       title: "Recording draft",
-      body: "A mock 42-second audio draft is saved locally before upload.",
+      body: "Mock recording saved locally.",
     },
     "upload-failed": {
       label: "Upload failed",
       title: "Upload needs retry",
-      body: "The draft remains on this device. Retry does not contact a real LMS.",
+      body: "Draft saved. Retry when ready.",
     },
     "queued-sync": {
       label: "Queued sync",
       title: "Offline answer queued",
-      body: "Your mock submission will retry when the connection is back.",
+      body: "Mock answer queued.",
     },
   };
   const selected = stateCopy[practiceState];
@@ -646,30 +632,38 @@ function FeedbackScreen({
       <section className={queued ? "feedback-hero queued" : "feedback-hero"}>
         <Trophy size={30} />
         <div>
-          <span className="small-label">{queued ? "Queued sync" : "Task feedback"}</span>
-          <h1>{queued ? "Saved for retry" : "Nice work on this practice"}</h1>
-          <p>
-            {queued
-              ? "Your answer is stored locally and will retry when the connection is back."
-              : "This is fixed-answer prototype feedback, not a real scoring model."}
-          </p>
+          <span className="small-label">{queued ? "Queued sync" : "Practice result"}</span>
+          <h1>{queued ? "Saved for retry" : "Practice complete"}</h1>
+          <div className="chip-row compact-row">
+            <span className="chip">{queued ? "Offline retry" : "Simulated feedback"}</span>
+            <span className="chip">Mock result</span>
+          </div>
         </div>
       </section>
-      <SimulationNotice notice={experience.simulationNotice} />
       <section className="feedback-card">
-        <h2>{lastFeedback?.title ?? task.title}</h2>
+        <h2>Result</h2>
         <div className="feedback-line">
-          <span>Answer check</span>
+          <span>{lastFeedback?.title ?? task.title}</span>
           <strong>{lastFeedback ? `${lastFeedback.correctCount}/${lastFeedback.totalCount} fixed labels matched` : "Ready"}</strong>
         </div>
         <div className="feedback-line">
-          <span>Submission state</span>
+          <span>State</span>
           <strong>{lastFeedback?.submissionStatus ?? "No new submission"}</strong>
         </div>
-        <p>
-          Focus on naming the plant part first, then explain what the part does. Try using one full sentence with
-          root, stem, leaf, or seed.
-        </p>
+      </section>
+      <section className="feedback-card">
+        <h2>What to review</h2>
+        <div className="chip-row">
+          <span className="chip">Plant names</span>
+          <span className="chip">Part functions</span>
+        </div>
+      </section>
+      <section className="feedback-card">
+        <h2>Next step</h2>
+        <div className="chip-row">
+          <span className="chip">Try again</span>
+          <span className="chip">Open path</span>
+        </div>
       </section>
       <ReflectionPanel
         reflection={reflection}
@@ -711,30 +705,32 @@ function ProgressScreen({
     <div className="screen-stack">
       <section className="growth-hero">
         <div>
-          <span className="small-label">Growth Record</span>
-          <h1>Keep growing through Unit 6</h1>
-          <p>No ranking is shown. Each area uses mock evidence labels for reflection.</p>
+          <span className="small-label">Progress</span>
+          <h1>Unit 6 growth</h1>
+          <div className="chip-row compact-row">
+            <span className="chip">Mock progress</span>
+            <span className="chip">Updated today</span>
+          </div>
         </div>
         <PlantMiniScene />
       </section>
-      <SimulationNotice notice={experience.simulationNotice} />
       <section className="progress-section">
         <div className="section-title-row">
-          <h2>Knowledge Mastery</h2>
-          <span className="step-pill">{experience.progress.evidenceCoverageLabel}</span>
+          <h2>Vocabulary</h2>
+          <span className="step-pill">Evidence level: {experience.progress.evidenceCoverageLabel}</span>
         </div>
         <div className="knowledge-stack">
           {experience.progress.knowledge.map((item) => (
             <div key={item.nodeId} className="knowledge-row">
               <span>{item.name}</span>
               <strong>{item.label}</strong>
-              <small>{item.evidenceCount} mock evidence items · {item.confidence.toLowerCase()} confidence</small>
+              <small>{item.evidenceCount} evidence items · {item.confidence.toLowerCase()}</small>
             </div>
           ))}
         </div>
       </section>
       <section className="progress-section">
-        <h2>Bloom Evidence</h2>
+        <h2>Bloom</h2>
         <div className="bloom-grid">
           {experience.progress.bloom.map((item) => (
             <div key={item.label} className="bloom-card">
@@ -746,7 +742,7 @@ function ProgressScreen({
         </div>
       </section>
       <section className="progress-section">
-        <h2>Learning Strategy</h2>
+        <h2>Learning strategy</h2>
         <div className="strategy-list">
           {experience.progress.strategies.map((strategy) => (
             <span key={strategy.label}>
@@ -757,7 +753,7 @@ function ProgressScreen({
         </div>
       </section>
       <section className="progress-section">
-        <h2>Thinking Quality</h2>
+        <h2>Thinking</h2>
         <div className="thinking-stack">
           {experience.progress.thinking.map((item) => (
             <article key={item.label}>
@@ -880,11 +876,11 @@ function BottomNav({
   );
 }
 
-function SimulationNotice({ notice }: { notice: string }) {
+function SimulationNotice() {
   return (
     <aside className="simulation-notice">
-      <Info size={18} />
-      <span>{notice} All progress and feedback shown here is simulated.</span>
+      <span>Prototype</span>
+      <span>Mock progress</span>
     </aside>
   );
 }
@@ -904,7 +900,40 @@ function ProgressRail({ completed, total, compact = false }: { completed: number
 }
 
 function StatusPill({ status }: { status: SafeTaskCard["status"] }) {
-  return <span className={`status-pill ${status.toLowerCase()}`}>{status.toLowerCase().replace("_", " ")}</span>;
+  return <span className={`status-pill ${status.toLowerCase()}`}>{formatTaskStatus(status)}</span>;
+}
+
+function personaFocusLabel(personaId: string): string {
+  if (personaId === "persona_a") {
+    return "Vocabulary foundation";
+  }
+  if (personaId === "persona_b") {
+    return "Reading support";
+  }
+  if (personaId === "persona_c") {
+    return "Writing stretch";
+  }
+  return "Unit 6 focus";
+}
+
+function formatPathStatus(status: string): string {
+  if (status === "PUBLISHED") {
+    return "Published";
+  }
+  return String(status).toLowerCase().replace(/_/g, " ");
+}
+
+function formatTaskStatus(status: SafeTaskCard["status"]): string {
+  if (status === "COMPLETED") {
+    return "Complete";
+  }
+  if (status === "LOCKED") {
+    return "Locked";
+  }
+  if (status === "REVIEW_PENDING") {
+    return "Review";
+  }
+  return "Ready";
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {

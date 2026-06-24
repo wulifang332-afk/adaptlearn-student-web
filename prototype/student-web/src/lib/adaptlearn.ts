@@ -1,7 +1,6 @@
 import {
   createInMemoryMockApi,
   isLearningPathDeliverable,
-  MOCK_SIMULATION_NOTICE,
   SCREEN_ROUTES,
   type BKTKnowledgeState,
   type BloomEvidenceProfile,
@@ -82,6 +81,7 @@ export type StudentExperience = {
         totalMinutes: number;
         completedCount: number;
         totalCount: number;
+        goalTags: string[];
         studentExplanation: string;
         route: string;
       }
@@ -89,7 +89,7 @@ export type StudentExperience = {
   recommendedTask: SafeTaskCard | undefined;
   taskCards: SafeTaskCard[];
   progress: SafeProgressSummary;
-  simulationNotice: typeof MOCK_SIMULATION_NOTICE;
+  simulationNotice: string;
   screenRoutes: typeof SCREEN_ROUTES;
 };
 
@@ -117,7 +117,7 @@ export const parseRoute = (pathname: string): RouteState => {
     return { screen: "task", taskId: decodeURIComponent(taskMatch[1]) };
   }
 
-  if (pathname === "/student/growth") {
+  if (pathname === "/student/growth" || pathname === "/student/progress") {
     return { screen: "growth" };
   }
 
@@ -133,7 +133,7 @@ export const routeToPath = (route: RouteState): string => {
     case "feedback":
       return `/student/tasks/${route.taskId}/feedback`;
     case "growth":
-      return "/student/growth";
+      return "/student/progress";
     case "home":
     default:
       return "/student";
@@ -175,13 +175,14 @@ export const buildStudentExperience = (
       totalMinutes: activePath.steps.reduce((total, step) => total + step.minutes, 0),
       completedCount: taskCards.filter((card) => card.status === "COMPLETED").length,
       totalCount: taskCards.length,
-      studentExplanation: activePath.teacher_audit_explanation.student_text,
+      goalTags: PATH_GOAL_TAGS[activePath.path_id] ?? ["Unit 6"],
+      studentExplanation: PATH_STUDENT_EXPLANATIONS[activePath.path_id] ?? "Ready path",
       route: `/student/path/${activePath.path_id}`,
     },
     recommendedTask,
     taskCards,
     progress: buildSafeProgressSummary(profile, runtime.api.fixture.knowledge_nodes, taskCards),
-    simulationNotice: homeResponse.simulationNotice,
+    simulationNotice: "Prototype data",
     screenRoutes: SCREEN_ROUTES,
   };
 };
@@ -338,19 +339,19 @@ const summarizeStrategies = (taskCards: SafeTaskCard[]): SafeProgressSummary["st
 
 const summarizeThinking = (thinking: ThinkingQualityProfile): SafeProgressSummary["thinking"] => [
   {
-    label: "Observation & discrimination",
+    label: "Observation",
     state: thinkingLevelLabel(thinking.observation_discrimination),
-    helper: "Notice words, images, and evidence before answering.",
+    helper: "Notice evidence.",
   },
   {
-    label: "Induction & inference",
+    label: "Inference",
     state: thinkingLevelLabel(thinking.induction_inference),
-    helper: "Use clues to explain why an answer fits.",
+    helper: "Use clues.",
   },
   {
-    label: "Critique & creation",
+    label: "Creation",
     state: thinkingLevelLabel(thinking.critique_creation),
-    helper: "Build your own reasoned response step by step.",
+    helper: "Build a reason.",
   },
 ];
 
@@ -376,23 +377,35 @@ const coverageToLabel = (value: number): string => {
 
 const explainStepForStudent = (step: PathStep, nodeNames: string[]): string => {
   const focus = nodeNames.slice(0, 2).join(" and ");
-  return `This step helps you practise ${focus || "Unit 6 skills"} in a manageable ${step.minutes}-minute task.`;
+  return `Focus: ${focus || "Unit 6 skills"}`;
 };
 
 const riskToStudentLabel = (risk: Task["review_risk"]): string => {
   if (risk === "\u9ad8") {
-    return "Teacher review after submit";
+    return "Teacher review";
   }
   if (risk === "\u4e2d") {
-    return "May be reviewed by teacher";
+    return "Teacher check";
   }
-  return "Immediate practice feedback";
+  return "Mock feedback";
 };
 
 const PATH_GOAL_LABELS: Record<string, string> = {
-  PTH01: "Build plant vocabulary and process order",
-  PTH03: "Strengthen reading summaries and inference",
-  PTH05: "Compare cultures and plan a short paragraph",
+  PTH01: "Plant vocabulary",
+  PTH03: "Reading summary",
+  PTH05: "Culture comparison",
+};
+
+const PATH_GOAL_TAGS: Record<string, string[]> = {
+  PTH01: ["Plant vocabulary", "Process order"],
+  PTH03: ["Main idea", "Inference"],
+  PTH05: ["Tea culture", "Short paragraph"],
+};
+
+const PATH_STUDENT_EXPLANATIONS: Record<string, string> = {
+  PTH01: "Ready path",
+  PTH03: "Reading path",
+  PTH05: "Writing path",
 };
 
 const TASK_TITLES: Record<string, string> = {
@@ -417,24 +430,24 @@ const TASK_TITLES: Record<string, string> = {
 };
 
 const TASK_PROMPTS: Record<string, string> = {
-  UI01: "Label root, stem, leaf, and seed on a self-made plant diagram.",
-  UI02: "Sort sunlight, water, carbon dioxide, sugar, and oxygen into inputs and outputs.",
-  UI03: "Put five photosynthesis steps in a logical order from water intake to oxygen release.",
-  UI04: "Read a short plant-factory text, choose the best title, and explain why one distractor does not fit.",
-  UI09: "Compress an 80-word photosynthesis explanation into one sentence of no more than 20 words.",
-  UI10: "Read a short text and complete a five-column process chart: input, place, process, output, and use.",
-  UI16: "Explain the two meanings of the word 'plant' in the title 'Within a plant' and why the double meaning fits.",
-  UI17: "Use first, then, next, and finally to explain photosynthesis from a process chart in up to 45 seconds.",
-  UI20: "Explain why the writer compares a leaf to a factory, and quote one expression as evidence.",
-  RF04: "Look at three recent mistakes, classify the main cause, and explain the evidence.",
-  RW02: "Read a self-made Chinese tea story and complete a table for tea type, people, place, and meaning.",
-  RW03: "Read a self-made British tea story and complete the same four-column table.",
-  RW04: "Fill in a Venn diagram with similarities and differences from the two tea stories.",
-  RW07: "Explain what 'tea is more than a drink' means and support it with one detail from either story.",
-  RW10: "Say whether you agree that tea is more than a drink, using two details from the texts or your experience.",
-  RW11: "Fill in a six-box writing plan: who drinks tea, what tea, where, with whom, story, and feeling.",
-  RW12: "Use your plan to write a short paragraph about tea habits and meaning in a family.",
-  RW13: "Use a four-item checklist to review your paragraph, revise at least two places, and explain why.",
+  UI01: "Match each plant word to the diagram.",
+  UI02: "Sort inputs and outputs.",
+  UI03: "Put the steps in order.",
+  UI04: "Choose the best title.",
+  UI09: "Write one short summary sentence.",
+  UI10: "Complete the process chart.",
+  UI16: "Explain the double meaning of plant.",
+  UI17: "Speak through the process chart.",
+  UI20: "Answer with one piece of evidence.",
+  RF04: "Sort recent mistakes by cause.",
+  RW02: "Find details in a Chinese tea story.",
+  RW03: "Find details in a British tea story.",
+  RW04: "Compare the two tea stories.",
+  RW07: "Explain the tea message.",
+  RW10: "Give your view with two details.",
+  RW11: "Plan a short paragraph.",
+  RW12: "Write the short paragraph.",
+  RW13: "Check and revise your writing.",
 };
 
 const NODE_LABELS: Record<string, string> = {
