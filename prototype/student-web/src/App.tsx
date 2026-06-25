@@ -14,6 +14,7 @@ import {
   Leaf,
   Lightbulb,
   LockKeyhole,
+  MessageCircle,
   Mic,
   Pencil,
   RefreshCw,
@@ -81,7 +82,7 @@ const classificationTerms: Array<{ key: ClassificationTermKey; label: string; sh
 const classificationZones: Array<{ key: ClassificationZoneKey; label: string }> = [
   { key: "inputs", label: "Inputs" },
   { key: "outputs", label: "Outputs" },
-  { key: "helps", label: "Helps the process" },
+  { key: "helps", label: "Helpers" },
 ];
 
 const expectedClassification: Record<ClassificationTermKey, ClassificationZoneKey> = {
@@ -130,6 +131,36 @@ const evaluationReasons: Array<{ key: EvaluationReasonKey; label: string }> = [
   { key: "missingVocabulary", label: "missing key vocabulary" },
 ];
 
+const similarPracticeByTaskId: Record<
+  string,
+  {
+    bloom: string;
+    title: string;
+    prompt: string;
+  }
+> = {
+  UI01: {
+    bloom: "Remember",
+    title: "Label leaf, flower, and seed",
+    prompt: "Use a new plant picture and match each visible part to the correct word.",
+  },
+  UI02: {
+    bloom: "Understand",
+    title: "Classify what a plant takes in and gives out during daytime",
+    prompt: "Sort new cards into what enters the plant, what leaves the plant, and what helps the process.",
+  },
+  UI03: {
+    bloom: "Apply",
+    title: "Order sunlight-to-oxygen steps",
+    prompt: "Put the events in order from sunlight reaching a leaf to oxygen leaving the plant.",
+  },
+  UI04: {
+    bloom: "Evaluate",
+    title: "Pick the explanation with stronger evidence",
+    prompt: "Compare two new explanations and choose the one that uses better plant-process evidence.",
+  },
+};
+
 export function App() {
   const runtimeRef = useRef(createStudentRuntime());
   const studentId: StudentId = "stu_persona_a";
@@ -156,7 +187,7 @@ export function App() {
   const [evaluateChoice, setEvaluateChoice] = useState<ExplanationChoiceKey | "">("");
   const [evaluateReason, setEvaluateReason] = useState<EvaluationReasonKey | "">("");
   const [recordingState, setRecordingState] = useState<RecordingState>("idle");
-  const [lastFeedback, setLastFeedback] = useState<LastFeedback | undefined>();
+  const [taskFeedback, setTaskFeedback] = useState<Record<string, LastFeedback>>({});
   const [reflection, setReflection] = useState("");
   const [reflectionSubmitted, setReflectionSubmitted] = useState(false);
   const [difficulty, setDifficulty] = useState("Just right");
@@ -215,15 +246,17 @@ export function App() {
     });
     const nextOverrides = markTaskCompleteAndUnlockNext(experience.taskCards, task.taskId);
     setStepOverrides((current) => ({ ...current, ...nextOverrides }));
-    setLastFeedback({
-      taskId: task.taskId,
-      title: task.title,
-      submissionStatus: submission.status,
-      correctCount: snapshot.correctCount,
-      totalCount: snapshot.totalCount,
-      resultText: snapshot.resultText,
-    });
-    navigate({ screen: "feedback", taskId: task.taskId });
+    setTaskFeedback((current) => ({
+      ...current,
+      [task.taskId]: {
+        taskId: task.taskId,
+        title: task.title,
+        submissionStatus: submission.status,
+        correctCount: snapshot.correctCount,
+        totalCount: snapshot.totalCount,
+        resultText: snapshot.resultText,
+      },
+    }));
   };
 
   const updateReflection = (value: string) => {
@@ -273,6 +306,7 @@ export function App() {
               setEvaluateReason={setEvaluateReason}
               recordingState={recordingState}
               setRecordingState={setRecordingState}
+              submittedFeedback={taskFeedback[activeTask.taskId]}
               onComplete={handleCompleteTask}
             />
           )}
@@ -280,7 +314,7 @@ export function App() {
             <FeedbackScreen
               experience={experience}
               task={activeTask}
-              lastFeedback={lastFeedback}
+              lastFeedback={taskFeedback[activeTask.taskId]}
               reflection={reflection}
               setReflection={updateReflection}
               reflectionSubmitted={reflectionSubmitted}
@@ -302,7 +336,7 @@ export function App() {
               navigate={navigate}
             />
           )}
-          {route.screen === "profile" && <ProfileScreen experience={experience} navigate={navigate} />}
+          {route.screen === "profile" && <ProfileScreen experience={experience} />}
         </section>
 
         <BottomNav route={route} experience={experience} navigate={navigate} />
@@ -374,11 +408,6 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
             Due Today
           </strong>
           <p>Finish by 18:00</p>
-        </div>
-        <div>
-          <span className="small-label">Credits</span>
-          <strong>{experience.studentProfile.creditTotal}</strong>
-          <p>Mock progress</p>
         </div>
       </section>
 
@@ -473,7 +502,10 @@ function PathTaskCard({ task, navigate }: { task: SafeTaskCard; navigate: (route
       <div className="path-task-body">
         <div className="section-title-row">
           <div>
-            <span className="small-label">Step {task.stepNo} · {task.bloom}</span>
+            <div className="path-step-title">
+              <span className="path-step-label">Step {task.stepNo}</span>
+              <span className="small-label">{task.bloom}</span>
+            </div>
             <h2>{task.title}</h2>
           </div>
           <StatusPill status={task.status} />
@@ -520,6 +552,7 @@ function TaskScreen({
   setEvaluateReason,
   recordingState,
   setRecordingState,
+  submittedFeedback,
   onComplete,
 }: {
   task: SafeTaskCard;
@@ -539,8 +572,15 @@ function TaskScreen({
   setEvaluateReason: (reason: EvaluationReasonKey | "") => void;
   recordingState: RecordingState;
   setRecordingState: (state: RecordingState) => void;
+  submittedFeedback: LastFeedback | undefined;
   onComplete: (task: SafeTaskCard) => void;
 }) {
+  const isSubmitted = Boolean(submittedFeedback);
+  const actionLabel =
+    task.taskId === "UI02" || task.taskId === "UI03" || task.taskId === "UI08" || task.taskId === "UI04"
+      ? "Check"
+      : "Submit";
+
   return (
     <div className="screen-stack task-screen">
       <SimulationNotice />
@@ -574,12 +614,14 @@ function TaskScreen({
         setEvaluateReason={setEvaluateReason}
         recordingState={recordingState}
         setRecordingState={setRecordingState}
+        isSubmitted={isSubmitted}
       />
 
       <button className="primary-button full-width" onClick={() => onComplete(task)}>
         <Send size={18} />
-        Complete task
+        {actionLabel}
       </button>
+      {submittedFeedback && <TaskResultCard feedback={submittedFeedback} />}
     </div>
   );
 }
@@ -602,6 +644,7 @@ function TaskInteraction({
   setEvaluateReason,
   recordingState,
   setRecordingState,
+  isSubmitted,
 }: {
   task: SafeTaskCard;
   answers: Record<PlantLabelKey, string>;
@@ -620,9 +663,16 @@ function TaskInteraction({
   setEvaluateReason: (reason: EvaluationReasonKey | "") => void;
   recordingState: RecordingState;
   setRecordingState: (state: RecordingState) => void;
+  isSubmitted: boolean;
 }) {
   if (task.taskId === "UI02") {
-    return <ClassifyInputsTask classification={classification} setClassification={setClassification} />;
+    return (
+      <ClassifyInputsTask
+        classification={classification}
+        setClassification={setClassification}
+        isSubmitted={isSubmitted}
+      />
+    );
   }
 
   if (task.taskId === "UI03") {
@@ -630,7 +680,13 @@ function TaskInteraction({
   }
 
   if (task.taskId === "UI08") {
-    return <AnalyzeSunlightTask analyzeChoices={analyzeChoices} setAnalyzeChoices={setAnalyzeChoices} />;
+    return (
+      <AnalyzeSunlightTask
+        analyzeChoices={analyzeChoices}
+        setAnalyzeChoices={setAnalyzeChoices}
+        isSubmitted={isSubmitted}
+      />
+    );
   }
 
   if (task.taskId === "UI04") {
@@ -654,6 +710,7 @@ function TaskInteraction({
       setAnswers={setAnswers}
       showHint={showHint}
       setShowHint={setShowHint}
+      isSubmitted={isSubmitted}
     />
   );
 }
@@ -663,11 +720,13 @@ function PlantLabelTask({
   setAnswers,
   showHint,
   setShowHint,
+  isSubmitted,
 }: {
   answers: Record<PlantLabelKey, string>;
   setAnswers: (answers: Record<PlantLabelKey, string>) => void;
   showHint: boolean;
   setShowHint: (value: boolean) => void;
+  isSubmitted: boolean;
 }) {
   const answeredCount = plantTargets.filter((target) => answers[target.key]).length;
   const correctCount = plantTargets.filter((target) => answers[target.key] === target.key).length;
@@ -715,7 +774,7 @@ function PlantLabelTask({
         <span>
           {answeredCount} of {plantTargets.length} labels selected
         </span>
-        <span>{correctCount} match</span>
+        {isSubmitted && <span>{correctCount} of {plantTargets.length} correct</span>}
       </div>
     </section>
   );
@@ -724,9 +783,11 @@ function PlantLabelTask({
 function ClassifyInputsTask({
   classification,
   setClassification,
+  isSubmitted,
 }: {
   classification: ClassificationAnswer;
   setClassification: (answers: ClassificationAnswer) => void;
+  isSubmitted: boolean;
 }) {
   return (
     <section className="practice-panel">
@@ -761,14 +822,30 @@ function ClassifyInputsTask({
           <article key={zone.key}>
             <strong>{zone.label}</strong>
             <span>
-              {classificationTerms
-                .filter((term) => classification[term.key] === zone.key)
-                .map((term) => term.label)
-                .join(", ") || "Choose cards"}
+              {isSubmitted
+                ? classificationTerms
+                    .filter((term) => classification[term.key] === zone.key)
+                    .map((term) => term.label)
+                    .join(", ") || "No cards selected"
+                : `${classificationTerms.filter((term) => classification[term.key] === zone.key).length} selected`}
             </span>
           </article>
         ))}
       </div>
+      {isSubmitted && (
+        <div className="answer-key-panel">
+          <h3>Correct answer shown after submit</h3>
+          {classificationZones.map((zone) => (
+            <p key={zone.key}>
+              <strong>{zone.label}:</strong>{" "}
+              {classificationTerms
+                .filter((term) => expectedClassification[term.key] === zone.key)
+                .map((term) => term.label)
+                .join(", ")}
+            </p>
+          ))}
+        </div>
+      )}
     </section>
   );
 }
@@ -818,9 +895,11 @@ function BuildProcessTask({
 function AnalyzeSunlightTask({
   analyzeChoices,
   setAnalyzeChoices,
+  isSubmitted,
 }: {
   analyzeChoices: AnalyzeChoiceKey[];
   setAnalyzeChoices: (choices: AnalyzeChoiceKey[]) => void;
+  isSubmitted: boolean;
 }) {
   const toggleChoice = (choice: AnalyzeChoiceKey) => {
     setAnalyzeChoices(
@@ -849,16 +928,17 @@ function AnalyzeSunlightTask({
             onClick={() => toggleChoice(option.key)}
           >
             <strong>{option.label}</strong>
-            <span>{option.detail}</span>
+            {isSubmitted && <span>{option.detail}</span>}
           </button>
         ))}
       </div>
-      <div className="because-strip">
-        <span>because</span>
-        <span>energy</span>
-        <span>make glucose</span>
-        <span>release oxygen</span>
-      </div>
+      {isSubmitted && (
+        <div className="because-strip">
+          <span>Correct answer shown after submit</span>
+          <span>because energy helps leaves make glucose</span>
+          <span>oxygen is released after food is made</span>
+        </div>
+      )}
     </section>
   );
 }
@@ -923,7 +1003,7 @@ function OralRetellingTask({
         <button
           className={isRecording ? "mic-button recording" : "mic-button"}
           type="button"
-          aria-label={isRecording ? "Stop recording" : "Start recording"}
+          aria-label={isRecording ? "Finish recording" : "Hold to speak"}
           onClick={() => setRecordingState(isRecording ? "saved" : "recording")}
         >
           <Mic size={28} />
@@ -940,7 +1020,7 @@ function OralRetellingTask({
         onClick={() => setRecordingState(isRecording ? "saved" : "recording")}
       >
         <Mic size={18} />
-        {isRecording ? "Stop recording" : "Start recording"}
+        {isRecording ? "Finish recording" : "Hold to speak"}
       </button>
       <div className={isRecording ? "waveform active" : "waveform"} aria-label="Simulated recording waveform">
         {Array.from({ length: 12 }, (_, index) => (
@@ -956,6 +1036,24 @@ function OralRetellingTask({
 
 function CircleNumber({ value }: { value: number }) {
   return <span className="circle-number">{value}</span>;
+}
+
+function TaskResultCard({ feedback }: { feedback: LastFeedback }) {
+  const isNiceWork = feedback.correctCount === feedback.totalCount;
+
+  return (
+    <section className="task-result-card" aria-label="Task result">
+      <div className="section-title-row">
+        <div>
+          <span className="small-label">Result</span>
+          <h2>{feedback.correctCount} of {feedback.totalCount} correct</h2>
+        </div>
+        <Check size={18} />
+      </div>
+      <p>{isNiceWork ? "Nice work" : "Needs review"}</p>
+      <p>Correct answer shown after submit</p>
+    </section>
+  );
 }
 
 function buildTaskSnapshot({
@@ -1072,11 +1170,15 @@ function FeedbackScreen({
         <h2>Result</h2>
         <div className="feedback-line">
           <span>{lastFeedback?.title ?? task.title}</span>
-          <strong>{lastFeedback?.resultText ?? "Ready"}</strong>
+          <strong>
+            {lastFeedback
+              ? `${lastFeedback.correctCount} of ${lastFeedback.totalCount} correct`
+              : "No new result"}
+          </strong>
         </div>
         <div className="feedback-line">
-          <span>State</span>
-          <strong>{lastFeedback?.submissionStatus ?? "No new submission"}</strong>
+          <span>Feedback</span>
+          <strong>{lastFeedback ? (lastFeedback.correctCount === lastFeedback.totalCount ? "Nice work" : "Needs review") : "Ready"}</strong>
         </div>
       </section>
       <section className="feedback-card">
@@ -1084,13 +1186,6 @@ function FeedbackScreen({
         <div className="chip-row">
           <span className="chip">Plant names</span>
           <span className="chip">Part functions</span>
-        </div>
-      </section>
-      <section className="feedback-card">
-        <h2>Next step</h2>
-        <div className="chip-row">
-          <span className="chip">Try again</span>
-          <span className="chip">Start next</span>
         </div>
       </section>
       <ReflectionPanel
@@ -1137,7 +1232,7 @@ function ProgressScreen({
   setDifficulty: (value: string) => void;
   navigate: (route: RouteState) => void;
 }) {
-  const pathId = experience.activePath?.pathId ?? "PTH01";
+  const [openSimilarTaskIds, setOpenSimilarTaskIds] = useState<string[]>([]);
 
   return (
     <div className="screen-stack">
@@ -1189,11 +1284,24 @@ function ProgressScreen({
                   <RefreshCw size={15} />
                   Retry Original
                 </button>
-                <button className="secondary-button compact-button" onClick={() => navigate({ screen: "path", pathId })}>
+                <button
+                  className="secondary-button compact-button"
+                  type="button"
+                  onClick={() =>
+                    setOpenSimilarTaskIds((current) =>
+                      current.includes(item.taskId)
+                        ? current.filter((taskId) => taskId !== item.taskId)
+                        : [...current, item.taskId],
+                    )
+                  }
+                >
                   <Leaf size={15} />
                   Practice Similar
                 </button>
               </div>
+              {openSimilarTaskIds.includes(item.taskId) && (
+                <SimilarPracticeCard item={similarPracticeByTaskId[item.taskId]} />
+              )}
             </article>
           ))}
         </div>
@@ -1211,9 +1319,23 @@ function ProgressScreen({
   );
 }
 
-function ProfileScreen({ experience, navigate }: { experience: StudentExperience; navigate: (route: RouteState) => void }) {
+function SimilarPracticeCard({ item }: { item: (typeof similarPracticeByTaskId)[string] | undefined }) {
+  if (!item) {
+    return null;
+  }
+
+  return (
+    <div className="similar-practice-card">
+      <span className="small-label">Similar Practice</span>
+      <strong>{item.title}</strong>
+      <p>{item.prompt}</p>
+      <span className="step-pill">{item.bloom}</span>
+    </div>
+  );
+}
+
+function ProfileScreen({ experience }: { experience: StudentExperience }) {
   const profile = experience.studentProfile;
-  const pathId = experience.activePath?.pathId ?? "PTH01";
 
   return (
     <div className="screen-stack profile-screen">
@@ -1318,9 +1440,9 @@ function ProfileScreen({ experience, navigate }: { experience: StudentExperience
             <span>{profile.classInfo.group}</span>
             <small>Weekly goal: {profile.classInfo.weeklyGoal}</small>
           </div>
-          <button className="secondary-button compact-button" onClick={() => navigate({ screen: "path", pathId })}>
-            <Route size={15} />
-            Start path
+          <button className="secondary-button compact-button" type="button">
+            <MessageCircle size={15} />
+            Enter Group Chat
           </button>
         </div>
       </section>

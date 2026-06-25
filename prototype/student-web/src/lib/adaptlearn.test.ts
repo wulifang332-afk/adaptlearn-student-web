@@ -127,8 +127,8 @@ describe("student web shared foundation integration", () => {
       expect.arrayContaining(["Vocabulary Builder", "Evidence Finder", "Sequence Starter", "Reflection Rookie"]),
     );
     expect(profile.classInfo).toMatchObject({
-      name: "Class 7A",
-      group: "Unit 6 Group",
+      name: "Class 104",
+      group: "Group 6",
       weeklyGoal: "Finish 6-step path",
     });
     expect(profileCopy).not.toMatch(/\p{Script=Han}/u);

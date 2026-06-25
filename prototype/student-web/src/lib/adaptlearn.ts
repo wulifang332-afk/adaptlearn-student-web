@@ -450,8 +450,8 @@ const buildStudentProfileSummary = (
       { label: "Reflection Rookie", detail: "Daily check-in" },
     ],
     classInfo: {
-      name: "Class 7A",
-      group: "Unit 6 Group",
+      name: "Class 104",
+      group: "Group 6",
       weeklyGoal: "Finish 6-step path",
     },
   };
