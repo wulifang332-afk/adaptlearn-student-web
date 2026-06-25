@@ -15,7 +15,6 @@ import {
   Lightbulb,
   LockKeyhole,
   Mic,
-  Network,
   Pencil,
   RefreshCw,
   Route,
@@ -47,13 +46,20 @@ type LastFeedback = {
   taskId: string;
   title: string;
   submissionStatus: string;
-  queued: boolean;
   correctCount: number;
   totalCount: number;
+  resultText: string;
 };
 
 type PlantLabelKey = "root" | "stem" | "leaf" | "seed";
-type PracticeState = "ready" | "mic-denied" | "recording" | "upload-failed" | "queued-sync";
+type ClassificationTermKey = "sunlight" | "water" | "carbonDioxide" | "oxygen" | "glucose" | "chlorophyll";
+type ClassificationZoneKey = "inputs" | "outputs" | "helps";
+type ClassificationAnswer = Record<ClassificationTermKey, ClassificationZoneKey | "">;
+type ProcessStepKey = "water" | "carbon" | "sunlight" | "glucose" | "oxygen";
+type AnalyzeChoiceKey = "glucose" | "oxygen" | "growth" | "water";
+type ExplanationChoiceKey = "strong" | "soil" | "green";
+type EvaluationReasonKey = "evidence" | "sequence" | "causeEffect" | "missingVocabulary";
+type RecordingState = "idle" | "recording" | "saved";
 
 const labelOptions: PlantLabelKey[] = ["root", "stem", "leaf", "seed"];
 const plantTargets: Array<{ key: PlantLabelKey; label: string; helper: string }> = [
@@ -61,6 +67,67 @@ const plantTargets: Array<{ key: PlantLabelKey; label: string; helper: string }>
   { key: "stem", label: "B", helper: "supports the plant" },
   { key: "seed", label: "C", helper: "new plant starter" },
   { key: "root", label: "D", helper: "under the soil" },
+];
+
+const classificationTerms: Array<{ key: ClassificationTermKey; label: string; shortLabel: string }> = [
+  { key: "sunlight", label: "sunlight", shortLabel: "sun" },
+  { key: "water", label: "water", shortLabel: "H2O" },
+  { key: "carbonDioxide", label: "carbon dioxide", shortLabel: "CO2" },
+  { key: "oxygen", label: "oxygen", shortLabel: "O2" },
+  { key: "glucose", label: "glucose", shortLabel: "food" },
+  { key: "chlorophyll", label: "chlorophyll", shortLabel: "green" },
+];
+
+const classificationZones: Array<{ key: ClassificationZoneKey; label: string }> = [
+  { key: "inputs", label: "Inputs" },
+  { key: "outputs", label: "Outputs" },
+  { key: "helps", label: "Helps the process" },
+];
+
+const expectedClassification: Record<ClassificationTermKey, ClassificationZoneKey> = {
+  sunlight: "inputs",
+  water: "inputs",
+  carbonDioxide: "inputs",
+  oxygen: "outputs",
+  glucose: "outputs",
+  chlorophyll: "helps",
+};
+
+const processSteps: Array<{ key: ProcessStepKey; label: string }> = [
+  { key: "water", label: "Roots take in water" },
+  { key: "carbon", label: "Leaves take in carbon dioxide" },
+  { key: "sunlight", label: "Sunlight gives energy" },
+  { key: "glucose", label: "Leaves make glucose" },
+  { key: "oxygen", label: "Oxygen is released" },
+];
+
+const analyzeOptions: Array<{ key: AnalyzeChoiceKey; label: string; detail: string }> = [
+  { key: "glucose", label: "Less glucose", detail: "Sunlight gives energy to make food." },
+  { key: "oxygen", label: "Less oxygen", detail: "Oxygen is released after food is made." },
+  { key: "growth", label: "Slower growth", detail: "The plant has less food for growth." },
+  { key: "water", label: "Water disappears", detail: "Water is still taken in by roots." },
+];
+
+const explanationOptions: Array<{ key: ExplanationChoiceKey; label: string }> = [
+  {
+    key: "strong",
+    label: "Plants use water, carbon dioxide, and sunlight to make glucose. Oxygen is released.",
+  },
+  {
+    key: "soil",
+    label: "Plants eat soil and turn it into oxygen when the sun is bright.",
+  },
+  {
+    key: "green",
+    label: "Leaves make oxygen because plants are green.",
+  },
+];
+
+const evaluationReasons: Array<{ key: EvaluationReasonKey; label: string }> = [
+  { key: "evidence", label: "uses evidence" },
+  { key: "sequence", label: "includes correct sequence" },
+  { key: "causeEffect", label: "explains cause and effect" },
+  { key: "missingVocabulary", label: "missing key vocabulary" },
 ];
 
 export function App() {
@@ -76,10 +143,22 @@ export function App() {
     seed: "",
   });
   const [showHint, setShowHint] = useState(false);
-  const [offlineMode, setOfflineMode] = useState(false);
-  const [practiceState, setPracticeState] = useState<PracticeState>("ready");
+  const [classification, setClassification] = useState<ClassificationAnswer>({
+    sunlight: "",
+    water: "",
+    carbonDioxide: "",
+    oxygen: "",
+    glucose: "",
+    chlorophyll: "",
+  });
+  const [processOrder, setProcessOrder] = useState<ProcessStepKey[]>([]);
+  const [analyzeChoices, setAnalyzeChoices] = useState<AnalyzeChoiceKey[]>([]);
+  const [evaluateChoice, setEvaluateChoice] = useState<ExplanationChoiceKey | "">("");
+  const [evaluateReason, setEvaluateReason] = useState<EvaluationReasonKey | "">("");
+  const [recordingState, setRecordingState] = useState<RecordingState>("idle");
   const [lastFeedback, setLastFeedback] = useState<LastFeedback | undefined>();
   const [reflection, setReflection] = useState("");
+  const [reflectionSubmitted, setReflectionSubmitted] = useState(false);
   const [difficulty, setDifficulty] = useState("Just right");
   const screenScrollRef = useRef<HTMLElement | null>(null);
   const currentPath = routeToPath(route);
@@ -117,25 +196,39 @@ export function App() {
       return;
     }
 
-    const correctCount = plantTargets.filter((target) => answers[target.key] === target.key).length;
+    const snapshot = buildTaskSnapshot({
+      task,
+      answers,
+      classification,
+      processOrder,
+      analyzeChoices,
+      evaluateChoice,
+      evaluateReason,
+      recordingState,
+    });
     const submission = submitMockTask(runtimeRef.current, {
       learnerId: experience.student.student_id,
       taskId: task.taskId,
       pathId: experience.activePath.pathId,
       pathVersion: experience.activePath.version,
-      offline: offlineMode,
+      offline: false,
     });
     const nextOverrides = markTaskCompleteAndUnlockNext(experience.taskCards, task.taskId);
     setStepOverrides((current) => ({ ...current, ...nextOverrides }));
     setLastFeedback({
       taskId: task.taskId,
       title: task.title,
-      submissionStatus: offlineMode ? "QUEUED_OFFLINE" : submission.status,
-      queued: offlineMode,
-      correctCount,
-      totalCount: plantTargets.length,
+      submissionStatus: submission.status,
+      correctCount: snapshot.correctCount,
+      totalCount: snapshot.totalCount,
+      resultText: snapshot.resultText,
     });
     navigate({ screen: "feedback", taskId: task.taskId });
+  };
+
+  const updateReflection = (value: string) => {
+    setReflection(value);
+    setReflectionSubmitted(false);
   };
 
   const activeTask =
@@ -168,10 +261,18 @@ export function App() {
               setAnswers={setAnswers}
               showHint={showHint}
               setShowHint={setShowHint}
-              offlineMode={offlineMode}
-              setOfflineMode={setOfflineMode}
-              practiceState={practiceState}
-              setPracticeState={setPracticeState}
+              classification={classification}
+              setClassification={setClassification}
+              processOrder={processOrder}
+              setProcessOrder={setProcessOrder}
+              analyzeChoices={analyzeChoices}
+              setAnalyzeChoices={setAnalyzeChoices}
+              evaluateChoice={evaluateChoice}
+              setEvaluateChoice={setEvaluateChoice}
+              evaluateReason={evaluateReason}
+              setEvaluateReason={setEvaluateReason}
+              recordingState={recordingState}
+              setRecordingState={setRecordingState}
               onComplete={handleCompleteTask}
             />
           )}
@@ -181,7 +282,9 @@ export function App() {
               task={activeTask}
               lastFeedback={lastFeedback}
               reflection={reflection}
-              setReflection={setReflection}
+              setReflection={updateReflection}
+              reflectionSubmitted={reflectionSubmitted}
+              onReflectionSubmit={() => setReflectionSubmitted(true)}
               difficulty={difficulty}
               setDifficulty={setDifficulty}
               navigate={navigate}
@@ -191,9 +294,12 @@ export function App() {
             <ProgressScreen
               experience={experience}
               reflection={reflection}
-              setReflection={setReflection}
+              setReflection={updateReflection}
+              reflectionSubmitted={reflectionSubmitted}
+              onReflectionSubmit={() => setReflectionSubmitted(true)}
               difficulty={difficulty}
               setDifficulty={setDifficulty}
+              navigate={navigate}
             />
           )}
           {route.screen === "profile" && <ProfileScreen experience={experience} navigate={navigate} />}
@@ -255,20 +361,24 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
         <PlantMiniScene />
       </section>
 
-      <section className="summary-band">
+      <section className="summary-band home-quick-grid" aria-label="Today summary">
         <div>
-          <span className="small-label">Learning Focus</span>
-          <strong>{personaFocusLabel(experience.student.persona_id)}</strong>
-          <p>Plant vocabulary</p>
+          <span className="small-label">Today</span>
+          <strong>Plant process</strong>
+          <p>Unit 6 task</p>
         </div>
         <div>
-          <span className="small-label">Path Goal</span>
-          <strong>{path?.goal ?? "No path"}</strong>
-          <div className="chip-row compact-row">
-            {path?.goalTags.map((tag) => (
-              <span key={tag} className="chip">{tag}</span>
-            ))}
-          </div>
+          <span className="small-label">Deadline</span>
+          <strong>
+            <Clock3 size={17} />
+            Due Today
+          </strong>
+          <p>Finish by 18:00</p>
+        </div>
+        <div>
+          <span className="small-label">Credits</span>
+          <strong>{experience.studentProfile.creditTotal}</strong>
+          <p>Mock progress</p>
         </div>
       </section>
 
@@ -279,7 +389,7 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
               <span className="small-label">Your Learning Path</span>
               <h2>{path.completedCount} of {path.totalCount} tasks complete</h2>
             </div>
-            <button className="icon-button" aria-label="Open learning path" onClick={() => navigate({ screen: "path", pathId: path.pathId })}>
+            <button className="icon-button" aria-label="View learning path" onClick={() => navigate({ screen: "path", pathId: path.pathId })}>
               <ChevronRight size={20} />
             </button>
           </div>
@@ -287,7 +397,7 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
           <div className="path-meta-grid">
             <span><Clock3 size={16} /> {path.totalMinutes} min</span>
             <span><BookOpenCheck size={16} /> {formatPathStatus(path.status)}</span>
-            <span><Network size={16} /> Offline ready</span>
+            <span><ClipboardCheck size={16} /> {path.totalCount} steps</span>
           </div>
         </section>
       )}
@@ -307,7 +417,7 @@ function HomeScreen({ experience, navigate }: { experience: StudentExperience; n
               <div className="chip-row">
                 <span className="chip">{task.bloom}</span>
                 <span className="chip">{task.minutes} min</span>
-                <span className="chip">{task.riskLabel}</span>
+                <span className="chip"><Clock3 size={15} /> Due Today</span>
               </div>
               <button
                 className="primary-button"
@@ -363,15 +473,14 @@ function PathTaskCard({ task, navigate }: { task: SafeTaskCard; navigate: (route
       <div className="path-task-body">
         <div className="section-title-row">
           <div>
-            <span className="small-label">{task.module}</span>
+            <span className="small-label">Step {task.stepNo} · {task.bloom}</span>
             <h2>{task.title}</h2>
           </div>
           <StatusPill status={task.status} />
         </div>
         <div className="chip-row">
-          <span className="chip">Step {task.stepNo}</span>
+          <span className="step-pill">{task.bloom}</span>
           <span className="chip">{task.nodeNames[0] ?? "Vocabulary"}</span>
-          <span className="chip">{task.bloom}</span>
           <span className="chip">{task.taskType}</span>
           <span className="chip">{task.minutes} min</span>
         </div>
@@ -386,7 +495,7 @@ function PathTaskCard({ task, navigate }: { task: SafeTaskCard; navigate: (route
           onClick={() => navigate({ screen: "task", taskId: task.taskId })}
         >
           {isLocked ? <LockKeyhole size={17} /> : <ChevronRight size={17} />}
-          {isLocked ? "Locked" : task.status === "COMPLETED" ? "Review" : "Open"}
+          {isLocked ? "Locked" : "Start"}
         </button>
       </div>
     </article>
@@ -399,10 +508,18 @@ function TaskScreen({
   setAnswers,
   showHint,
   setShowHint,
-  offlineMode,
-  setOfflineMode,
-  practiceState,
-  setPracticeState,
+  classification,
+  setClassification,
+  processOrder,
+  setProcessOrder,
+  analyzeChoices,
+  setAnalyzeChoices,
+  evaluateChoice,
+  setEvaluateChoice,
+  evaluateReason,
+  setEvaluateReason,
+  recordingState,
+  setRecordingState,
   onComplete,
 }: {
   task: SafeTaskCard;
@@ -410,16 +527,20 @@ function TaskScreen({
   setAnswers: (answers: Record<PlantLabelKey, string>) => void;
   showHint: boolean;
   setShowHint: (value: boolean) => void;
-  offlineMode: boolean;
-  setOfflineMode: (value: boolean) => void;
-  practiceState: PracticeState;
-  setPracticeState: (value: PracticeState) => void;
+  classification: ClassificationAnswer;
+  setClassification: (answers: ClassificationAnswer) => void;
+  processOrder: ProcessStepKey[];
+  setProcessOrder: (order: ProcessStepKey[]) => void;
+  analyzeChoices: AnalyzeChoiceKey[];
+  setAnalyzeChoices: (choices: AnalyzeChoiceKey[]) => void;
+  evaluateChoice: ExplanationChoiceKey | "";
+  setEvaluateChoice: (choice: ExplanationChoiceKey | "") => void;
+  evaluateReason: EvaluationReasonKey | "";
+  setEvaluateReason: (reason: EvaluationReasonKey | "") => void;
+  recordingState: RecordingState;
+  setRecordingState: (state: RecordingState) => void;
   onComplete: (task: SafeTaskCard) => void;
 }) {
-  const answeredCount = plantTargets.filter((target) => answers[target.key]).length;
-  const correctCount = plantTargets.filter((target) => answers[target.key] === target.key).length;
-  const isPlantTask = task.taskId === "UI01";
-
   return (
     <div className="screen-stack task-screen">
       <SimulationNotice />
@@ -430,179 +551,485 @@ function TaskScreen({
         <div className="chip-row">
           <span className="chip">Step {task.stepNo}</span>
           <span className="chip">{task.bloom}</span>
+          <span className="chip">{task.minutes} min</span>
           <span className="chip">{task.responseFormat}</span>
-          <span className="chip">{task.riskLabel}</span>
         </div>
       </section>
 
-      {isPlantTask ? (
-        <section className="practice-panel">
-          <PlantDiagram />
-          <div className="answer-grid" aria-label="Plant part label answers">
-            {plantTargets.map((target) => (
-              <label key={target.key} className="answer-slot">
-                <span>{target.label}. {target.helper}</span>
-                <select
-                  value={answers[target.key]}
-                  onChange={(event) =>
-                    setAnswers({
-                      ...answers,
-                      [target.key]: event.target.value,
-                    })
-                  }
-                >
-                  <option value="">Choose label</option>
-                  {labelOptions.map((option) => (
-                    <option key={option} value={option}>
-                      {option}
-                    </option>
-                  ))}
-                </select>
-              </label>
-            ))}
-          </div>
-          <div className="task-actions">
-            <button
-              className="secondary-button"
-              onClick={() => setAnswers({ root: "", stem: "", leaf: "", seed: "" })}
-            >
-              <RefreshCw size={17} />
-              Reset
-            </button>
-            <button className="secondary-button" onClick={() => setShowHint(!showHint)}>
-              <Lightbulb size={17} />
-              Hint
-            </button>
-          </div>
-          {showHint && (
-            <div className="hint-box">
-              Position helps: roots below, stem in the middle, leaves on the sides, seed in the soil.
-            </div>
-          )}
-          <div className="feedback-meter">
-            <span>{answeredCount} of {plantTargets.length} labels selected</span>
-            <span>{correctCount} match</span>
-          </div>
-        </section>
-      ) : (
-        <section className="practice-panel">
-          <textarea className="response-box" defaultValue="" placeholder="Write your mock response here." />
-          <div className="hint-box">{task.studentReason}</div>
-        </section>
-      )}
-
-      <PracticeStatePanel
+      <TaskInteraction
         task={task}
-        practiceState={practiceState}
-        setPracticeState={setPracticeState}
-        offlineMode={offlineMode}
-        setOfflineMode={setOfflineMode}
+        answers={answers}
+        setAnswers={setAnswers}
+        showHint={showHint}
+        setShowHint={setShowHint}
+        classification={classification}
+        setClassification={setClassification}
+        processOrder={processOrder}
+        setProcessOrder={setProcessOrder}
+        analyzeChoices={analyzeChoices}
+        setAnalyzeChoices={setAnalyzeChoices}
+        evaluateChoice={evaluateChoice}
+        setEvaluateChoice={setEvaluateChoice}
+        evaluateReason={evaluateReason}
+        setEvaluateReason={setEvaluateReason}
+        recordingState={recordingState}
+        setRecordingState={setRecordingState}
       />
 
       <button className="primary-button full-width" onClick={() => onComplete(task)}>
         <Send size={18} />
-        Complete mock task
+        Complete task
       </button>
     </div>
   );
 }
 
-function PracticeStatePanel({
+function TaskInteraction({
   task,
-  practiceState,
-  setPracticeState,
-  offlineMode,
-  setOfflineMode,
+  answers,
+  setAnswers,
+  showHint,
+  setShowHint,
+  classification,
+  setClassification,
+  processOrder,
+  setProcessOrder,
+  analyzeChoices,
+  setAnalyzeChoices,
+  evaluateChoice,
+  setEvaluateChoice,
+  evaluateReason,
+  setEvaluateReason,
+  recordingState,
+  setRecordingState,
 }: {
   task: SafeTaskCard;
-  practiceState: PracticeState;
-  setPracticeState: (value: PracticeState) => void;
-  offlineMode: boolean;
-  setOfflineMode: (value: boolean) => void;
+  answers: Record<PlantLabelKey, string>;
+  setAnswers: (answers: Record<PlantLabelKey, string>) => void;
+  showHint: boolean;
+  setShowHint: (value: boolean) => void;
+  classification: ClassificationAnswer;
+  setClassification: (answers: ClassificationAnswer) => void;
+  processOrder: ProcessStepKey[];
+  setProcessOrder: (order: ProcessStepKey[]) => void;
+  analyzeChoices: AnalyzeChoiceKey[];
+  setAnalyzeChoices: (choices: AnalyzeChoiceKey[]) => void;
+  evaluateChoice: ExplanationChoiceKey | "";
+  setEvaluateChoice: (choice: ExplanationChoiceKey | "") => void;
+  evaluateReason: EvaluationReasonKey | "";
+  setEvaluateReason: (reason: EvaluationReasonKey | "") => void;
+  recordingState: RecordingState;
+  setRecordingState: (state: RecordingState) => void;
 }) {
-  const stateCopy: Record<PracticeState, { label: string; title: string; body: string }> = {
-    ready: {
-      label: "Ready",
-      title: requiresAudioResponse(task) ? "Media ready" : "Diagram ready",
-      body: requiresAudioResponse(task) ? "Ask for mic permission." : "Text + diagram input.",
-    },
-    "mic-denied": {
-      label: "Mic denied",
-      title: "Microphone permission denied",
-      body: "Use text or retry mic.",
-    },
-    recording: {
-      label: "Recording",
-      title: "Recording draft",
-      body: "Mock recording saved locally.",
-    },
-    "upload-failed": {
-      label: "Upload failed",
-      title: "Upload needs retry",
-      body: "Draft saved. Retry when ready.",
-    },
-    "queued-sync": {
-      label: "Queued sync",
-      title: "Offline answer queued",
-      body: "Mock answer queued.",
-    },
-  };
-  const selected = stateCopy[practiceState];
+  if (task.taskId === "UI02") {
+    return <ClassifyInputsTask classification={classification} setClassification={setClassification} />;
+  }
+
+  if (task.taskId === "UI03") {
+    return <BuildProcessTask processOrder={processOrder} setProcessOrder={setProcessOrder} />;
+  }
+
+  if (task.taskId === "UI08") {
+    return <AnalyzeSunlightTask analyzeChoices={analyzeChoices} setAnalyzeChoices={setAnalyzeChoices} />;
+  }
+
+  if (task.taskId === "UI04") {
+    return (
+      <EvaluateExplanationTask
+        evaluateChoice={evaluateChoice}
+        setEvaluateChoice={setEvaluateChoice}
+        evaluateReason={evaluateReason}
+        setEvaluateReason={setEvaluateReason}
+      />
+    );
+  }
+
+  if (task.taskId === "UI17") {
+    return <OralRetellingTask recordingState={recordingState} setRecordingState={setRecordingState} />;
+  }
 
   return (
-    <section className="media-state-panel">
-      <div className="media-state-copy">
-        <Mic size={18} />
-        <div>
-          <strong>{selected.title}</strong>
-          <span>{selected.body}</span>
-        </div>
-      </div>
-      <div className="state-mode-grid" role="group" aria-label="Practice state preview">
-        {(Object.keys(stateCopy) as PracticeState[]).map((state) => (
-          <button
-            key={state}
-            className={practiceState === state ? "selected" : ""}
-            type="button"
-            onClick={() => {
-              setPracticeState(state);
-              if (state === "queued-sync") {
-                setOfflineMode(true);
+    <PlantLabelTask
+      answers={answers}
+      setAnswers={setAnswers}
+      showHint={showHint}
+      setShowHint={setShowHint}
+    />
+  );
+}
+
+function PlantLabelTask({
+  answers,
+  setAnswers,
+  showHint,
+  setShowHint,
+}: {
+  answers: Record<PlantLabelKey, string>;
+  setAnswers: (answers: Record<PlantLabelKey, string>) => void;
+  showHint: boolean;
+  setShowHint: (value: boolean) => void;
+}) {
+  const answeredCount = plantTargets.filter((target) => answers[target.key]).length;
+  const correctCount = plantTargets.filter((target) => answers[target.key] === target.key).length;
+
+  return (
+    <section className="practice-panel">
+      <PlantDiagram />
+      <div className="answer-grid" aria-label="Plant part label answers">
+        {plantTargets.map((target) => (
+          <label key={target.key} className="answer-slot">
+            <span>
+              {target.label}. {target.helper}
+            </span>
+            <select
+              value={answers[target.key]}
+              onChange={(event) =>
+                setAnswers({
+                  ...answers,
+                  [target.key]: event.target.value,
+                })
               }
-            }}
-          >
-            {stateCopy[state].label}
-          </button>
+            >
+              <option value="">Choose label</option>
+              {labelOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
         ))}
       </div>
-      <div className="media-state-footer">
-        <label className="switch-row">
-          <span>Work offline</span>
-          <input
-            type="checkbox"
-            checked={offlineMode}
-            onChange={(event) => {
-              setOfflineMode(event.target.checked);
-              if (event.target.checked) {
-                setPracticeState("queued-sync");
-              }
-            }}
-          />
-        </label>
-        {practiceState === "upload-failed" && (
-          <button className="secondary-button compact-button" type="button" onClick={() => setPracticeState("ready")}>
-            <RefreshCw size={15} />
-            Retry
-          </button>
-        )}
+      <div className="task-actions">
+        <button className="secondary-button" onClick={() => setAnswers({ root: "", stem: "", leaf: "", seed: "" })}>
+          <RefreshCw size={17} />
+          Reset
+        </button>
+        <button className="secondary-button" onClick={() => setShowHint(!showHint)}>
+          <Lightbulb size={17} />
+          Hint
+        </button>
+      </div>
+      {showHint && <div className="hint-box">Roots are below the soil. Leaves are on the sides.</div>}
+      <div className="feedback-meter">
+        <span>
+          {answeredCount} of {plantTargets.length} labels selected
+        </span>
+        <span>{correctCount} match</span>
       </div>
     </section>
   );
 }
 
-function requiresAudioResponse(task: SafeTaskCard): boolean {
-  const response = `${task.responseFormat} ${task.taskType}`.toLowerCase();
-  return response.includes("audio") || response.includes("speaking") || response.includes("oral");
+function ClassifyInputsTask({
+  classification,
+  setClassification,
+}: {
+  classification: ClassificationAnswer;
+  setClassification: (answers: ClassificationAnswer) => void;
+}) {
+  return (
+    <section className="practice-panel">
+      <div className="section-title-row">
+        <h2>Sort the cards</h2>
+        <Leaf size={18} />
+      </div>
+      <div className="classification-grid" aria-label="Photosynthesis classification cards">
+        {classificationTerms.map((term) => (
+          <article key={term.key} className="classification-card">
+            <div className={`term-icon ${term.key}`} aria-hidden="true">
+              {term.shortLabel}
+            </div>
+            <strong>{term.label}</strong>
+            <div className="mini-choice-row">
+              {classificationZones.map((zone) => (
+                <button
+                  key={zone.key}
+                  type="button"
+                  className={classification[term.key] === zone.key ? "selected" : ""}
+                  onClick={() => setClassification({ ...classification, [term.key]: zone.key })}
+                >
+                  {zone.label}
+                </button>
+              ))}
+            </div>
+          </article>
+        ))}
+      </div>
+      <div className="sort-zone-grid" aria-label="Selected groups">
+        {classificationZones.map((zone) => (
+          <article key={zone.key}>
+            <strong>{zone.label}</strong>
+            <span>
+              {classificationTerms
+                .filter((term) => classification[term.key] === zone.key)
+                .map((term) => term.label)
+                .join(", ") || "Choose cards"}
+            </span>
+          </article>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function BuildProcessTask({
+  processOrder,
+  setProcessOrder,
+}: {
+  processOrder: ProcessStepKey[];
+  setProcessOrder: (order: ProcessStepKey[]) => void;
+}) {
+  const remainingSteps = processSteps.filter((step) => !processOrder.includes(step.key));
+
+  return (
+    <section className="practice-panel">
+      <div className="section-title-row">
+        <h2>Build the sequence</h2>
+        <Route size={18} />
+      </div>
+      <div className="sequence-track" aria-label="Chosen photosynthesis sequence">
+        {Array.from({ length: processSteps.length }, (_, index) => {
+          const chosen = processSteps.find((step) => step.key === processOrder[index]);
+          return (
+            <div key={index} className={chosen ? "sequence-slot filled" : "sequence-slot"}>
+              <span>{index + 1}</span>
+              <strong>{chosen?.label ?? "Choose a step"}</strong>
+            </div>
+          );
+        })}
+      </div>
+      <div className="sequence-card-grid">
+        {remainingSteps.map((step) => (
+          <button key={step.key} type="button" onClick={() => setProcessOrder([...processOrder, step.key])}>
+            <CircleNumber value={processOrder.length + 1} />
+            {step.label}
+          </button>
+        ))}
+      </div>
+      <button className="secondary-button compact-button" type="button" onClick={() => setProcessOrder([])}>
+        <RefreshCw size={15} />
+        Reset order
+      </button>
+    </section>
+  );
+}
+
+function AnalyzeSunlightTask({
+  analyzeChoices,
+  setAnalyzeChoices,
+}: {
+  analyzeChoices: AnalyzeChoiceKey[];
+  setAnalyzeChoices: (choices: AnalyzeChoiceKey[]) => void;
+}) {
+  const toggleChoice = (choice: AnalyzeChoiceKey) => {
+    setAnalyzeChoices(
+      analyzeChoices.includes(choice)
+        ? analyzeChoices.filter((selected) => selected !== choice)
+        : [...analyzeChoices, choice],
+    );
+  };
+
+  return (
+    <section className="practice-panel">
+      <div className="scenario-card">
+        <PlantMiniScene />
+        <div>
+          <span className="small-label">Scenario</span>
+          <strong>Sunlight is missing</strong>
+          <p>Choose what changes. Use because words.</p>
+        </div>
+      </div>
+      <div className="cause-effect-grid" aria-label="Cause and effect choices">
+        {analyzeOptions.map((option) => (
+          <button
+            key={option.key}
+            className={analyzeChoices.includes(option.key) ? "selected" : ""}
+            type="button"
+            onClick={() => toggleChoice(option.key)}
+          >
+            <strong>{option.label}</strong>
+            <span>{option.detail}</span>
+          </button>
+        ))}
+      </div>
+      <div className="because-strip">
+        <span>because</span>
+        <span>energy</span>
+        <span>make glucose</span>
+        <span>release oxygen</span>
+      </div>
+    </section>
+  );
+}
+
+function EvaluateExplanationTask({
+  evaluateChoice,
+  setEvaluateChoice,
+  evaluateReason,
+  setEvaluateReason,
+}: {
+  evaluateChoice: ExplanationChoiceKey | "";
+  setEvaluateChoice: (choice: ExplanationChoiceKey | "") => void;
+  evaluateReason: EvaluationReasonKey | "";
+  setEvaluateReason: (reason: EvaluationReasonKey | "") => void;
+}) {
+  return (
+    <section className="practice-panel">
+      <div className="section-title-row">
+        <h2>Choose the strongest explanation</h2>
+        <BadgeCheck size={18} />
+      </div>
+      <div className="explanation-list" aria-label="Student explanation choices">
+        {explanationOptions.map((option) => (
+          <button
+            key={option.key}
+            className={evaluateChoice === option.key ? "selected" : ""}
+            type="button"
+            onClick={() => setEvaluateChoice(option.key)}
+          >
+            <span>{option.label}</span>
+          </button>
+        ))}
+      </div>
+      <div className="reason-chip-grid" aria-label="Reason choices">
+        {evaluationReasons.map((reason) => (
+          <button
+            key={reason.key}
+            className={evaluateReason === reason.key ? "selected" : ""}
+            type="button"
+            onClick={() => setEvaluateReason(reason.key)}
+          >
+            {reason.label}
+          </button>
+        ))}
+      </div>
+    </section>
+  );
+}
+
+function OralRetellingTask({
+  recordingState,
+  setRecordingState,
+}: {
+  recordingState: RecordingState;
+  setRecordingState: (state: RecordingState) => void;
+}) {
+  const isRecording = recordingState === "recording";
+
+  return (
+    <section className="practice-panel oral-panel">
+      <div className="oral-card">
+        <button
+          className={isRecording ? "mic-button recording" : "mic-button"}
+          type="button"
+          aria-label={isRecording ? "Stop recording" : "Start recording"}
+          onClick={() => setRecordingState(isRecording ? "saved" : "recording")}
+        >
+          <Mic size={28} />
+        </button>
+        <div>
+          <span className="small-label">Prototype voice</span>
+          <h2>Retell photosynthesis</h2>
+          <p>Use first, then, next, finally.</p>
+        </div>
+      </div>
+      <button
+        className={isRecording ? "primary-button recording-button" : "primary-button recording-button"}
+        type="button"
+        onClick={() => setRecordingState(isRecording ? "saved" : "recording")}
+      >
+        <Mic size={18} />
+        {isRecording ? "Stop recording" : "Start recording"}
+      </button>
+      <div className={isRecording ? "waveform active" : "waveform"} aria-label="Simulated recording waveform">
+        {Array.from({ length: 12 }, (_, index) => (
+          <span key={index} />
+        ))}
+      </div>
+      <div className="hint-box">
+        {recordingState === "saved" ? "Recording saved in this prototype." : "No real audio is captured."}
+      </div>
+    </section>
+  );
+}
+
+function CircleNumber({ value }: { value: number }) {
+  return <span className="circle-number">{value}</span>;
+}
+
+function buildTaskSnapshot({
+  task,
+  answers,
+  classification,
+  processOrder,
+  analyzeChoices,
+  evaluateChoice,
+  evaluateReason,
+  recordingState,
+}: {
+  task: SafeTaskCard;
+  answers: Record<PlantLabelKey, string>;
+  classification: ClassificationAnswer;
+  processOrder: ProcessStepKey[];
+  analyzeChoices: AnalyzeChoiceKey[];
+  evaluateChoice: ExplanationChoiceKey | "";
+  evaluateReason: EvaluationReasonKey | "";
+  recordingState: RecordingState;
+}): Pick<LastFeedback, "correctCount" | "totalCount" | "resultText"> {
+  if (task.taskId === "UI02") {
+    const placedCount = classificationTerms.filter((term) => classification[term.key]).length;
+    const matchedCount = classificationTerms.filter((term) => classification[term.key] === expectedClassification[term.key]).length;
+    return {
+      correctCount: matchedCount,
+      totalCount: classificationTerms.length,
+      resultText: `${placedCount} of ${classificationTerms.length} cards placed`,
+    };
+  }
+
+  if (task.taskId === "UI03") {
+    const matchedCount = processSteps.filter((step, index) => processOrder[index] === step.key).length;
+    return {
+      correctCount: matchedCount,
+      totalCount: processSteps.length,
+      resultText: `${processOrder.length} of ${processSteps.length} steps placed`,
+    };
+  }
+
+  if (task.taskId === "UI08") {
+    const evidenceChoices: AnalyzeChoiceKey[] = ["glucose", "oxygen", "growth"];
+    const matchedCount = analyzeChoices.filter((choice) => evidenceChoices.includes(choice)).length;
+    return {
+      correctCount: matchedCount,
+      totalCount: evidenceChoices.length,
+      resultText: `${analyzeChoices.length} effects chosen`,
+    };
+  }
+
+  if (task.taskId === "UI04") {
+    return {
+      correctCount: Number(evaluateChoice === "strong") + Number(Boolean(evaluateReason)),
+      totalCount: 2,
+      resultText: evaluateChoice && evaluateReason ? "Choice and reason saved" : "Choice saved",
+    };
+  }
+
+  if (task.taskId === "UI17") {
+    const hasRecording = recordingState === "recording" || recordingState === "saved";
+    return {
+      correctCount: hasRecording ? 1 : 0,
+      totalCount: 1,
+      resultText: hasRecording ? "Retelling draft saved" : "Retelling ready",
+    };
+  }
+
+  const selectedCount = plantTargets.filter((target) => answers[target.key]).length;
+  const matchedCount = plantTargets.filter((target) => answers[target.key] === target.key).length;
+  return {
+    correctCount: matchedCount,
+    totalCount: plantTargets.length,
+    resultText: `${selectedCount} of ${plantTargets.length} labels selected`,
+  };
 }
 
 function FeedbackScreen({
@@ -611,6 +1038,8 @@ function FeedbackScreen({
   lastFeedback,
   reflection,
   setReflection,
+  reflectionSubmitted,
+  onReflectionSubmit,
   difficulty,
   setDifficulty,
   navigate,
@@ -620,21 +1049,21 @@ function FeedbackScreen({
   lastFeedback: LastFeedback | undefined;
   reflection: string;
   setReflection: (value: string) => void;
+  reflectionSubmitted: boolean;
+  onReflectionSubmit: () => void;
   difficulty: string;
   setDifficulty: (value: string) => void;
   navigate: (route: RouteState) => void;
 }) {
-  const queued = lastFeedback?.queued;
-
   return (
     <div className="screen-stack">
-      <section className={queued ? "feedback-hero queued" : "feedback-hero"}>
+      <section className="feedback-hero">
         <Trophy size={30} />
         <div>
-          <span className="small-label">{queued ? "Queued sync" : "Practice result"}</span>
-          <h1>{queued ? "Saved for retry" : "Practice complete"}</h1>
+          <span className="small-label">Practice result</span>
+          <h1>Practice complete</h1>
           <div className="chip-row compact-row">
-            <span className="chip">{queued ? "Offline retry" : "Simulated feedback"}</span>
+            <span className="chip">Simulated feedback</span>
             <span className="chip">Mock result</span>
           </div>
         </div>
@@ -643,7 +1072,7 @@ function FeedbackScreen({
         <h2>Result</h2>
         <div className="feedback-line">
           <span>{lastFeedback?.title ?? task.title}</span>
-          <strong>{lastFeedback ? `${lastFeedback.correctCount}/${lastFeedback.totalCount} fixed labels matched` : "Ready"}</strong>
+          <strong>{lastFeedback?.resultText ?? "Ready"}</strong>
         </div>
         <div className="feedback-line">
           <span>State</span>
@@ -661,12 +1090,14 @@ function FeedbackScreen({
         <h2>Next step</h2>
         <div className="chip-row">
           <span className="chip">Try again</span>
-          <span className="chip">Open path</span>
+          <span className="chip">Start next</span>
         </div>
       </section>
       <ReflectionPanel
         reflection={reflection}
         setReflection={setReflection}
+        reflectionSubmitted={reflectionSubmitted}
+        onReflectionSubmit={onReflectionSubmit}
         difficulty={difficulty}
         setDifficulty={setDifficulty}
       />
@@ -691,81 +1122,88 @@ function ProgressScreen({
   experience,
   reflection,
   setReflection,
+  reflectionSubmitted,
+  onReflectionSubmit,
   difficulty,
   setDifficulty,
+  navigate,
 }: {
   experience: StudentExperience;
   reflection: string;
   setReflection: (value: string) => void;
+  reflectionSubmitted: boolean;
+  onReflectionSubmit: () => void;
   difficulty: string;
   setDifficulty: (value: string) => void;
+  navigate: (route: RouteState) => void;
 }) {
+  const pathId = experience.activePath?.pathId ?? "PTH01";
+
   return (
     <div className="screen-stack">
       <section className="growth-hero">
         <div>
           <span className="small-label">Progress</span>
-          <h1>Unit 6 growth</h1>
+          <h1>My practice</h1>
           <div className="chip-row compact-row">
             <span className="chip">Mock progress</span>
-            <span className="chip">Updated today</span>
+            <span className="chip">Unit 6</span>
           </div>
         </div>
         <PlantMiniScene />
       </section>
+
+      <section className="progress-section credit-total-card">
+        <div className="section-title-row">
+          <div>
+            <span className="small-label">My Credits</span>
+            <h2>{experience.studentProfile.creditTotal} credits</h2>
+          </div>
+          <Award size={22} />
+        </div>
+        <ProgressRail completed={experience.activePath?.completedCount ?? 0} total={experience.activePath?.totalCount ?? 6} />
+        <div className="credit-visual">
+          <span>{experience.studentProfile.creditTotal}</span>
+          <strong>Unit 6 points</strong>
+        </div>
+      </section>
+
       <section className="progress-section">
         <div className="section-title-row">
-          <h2>Vocabulary</h2>
-          <span className="step-pill">Evidence level: {experience.progress.evidenceCoverageLabel}</span>
+          <div>
+            <span className="small-label">Review Notebook</span>
+            <h2>Needs Review</h2>
+          </div>
+          <ClipboardCheck size={20} />
         </div>
-        <div className="knowledge-stack">
-          {experience.progress.knowledge.map((item) => (
-            <div key={item.nodeId} className="knowledge-row">
-              <span>{item.name}</span>
-              <strong>{item.label}</strong>
-              <small>{item.evidenceCount} evidence items · {item.confidence.toLowerCase()}</small>
-            </div>
-          ))}
-        </div>
-      </section>
-      <section className="progress-section">
-        <h2>Bloom</h2>
-        <div className="bloom-grid">
-          {experience.progress.bloom.map((item) => (
-            <div key={item.label} className="bloom-card">
-              <strong>{item.label}</strong>
-              <span>{item.emerging + item.confirmed} growing</span>
-              <small>{item.needsEvidence} need more evidence</small>
-            </div>
-          ))}
-        </div>
-      </section>
-      <section className="progress-section">
-        <h2>Learning strategy</h2>
-        <div className="strategy-list">
-          {experience.progress.strategies.map((strategy) => (
-            <span key={strategy.label}>
-              <Leaf size={15} />
-              {strategy.label} · {strategy.count}
-            </span>
-          ))}
-        </div>
-      </section>
-      <section className="progress-section">
-        <h2>Thinking</h2>
-        <div className="thinking-stack">
-          {experience.progress.thinking.map((item) => (
-            <article key={item.label}>
-              <strong>{item.label}</strong>
-              <span>{item.state}</span>
-              <p>{item.helper}</p>
+        <div className="review-notebook-list">
+          {experience.studentProfile.reviewItems.map((item) => (
+            <article key={item.taskId} className="review-notebook-card">
+              <div>
+                <span className="step-pill">{item.label}</span>
+                <strong>{item.title}</strong>
+                <small>{item.focus}</small>
+              </div>
+              <div className="review-actions">
+                <button className="secondary-button compact-button" onClick={() => navigate({ screen: "task", taskId: item.taskId })}>
+                  <RefreshCw size={15} />
+                  Retry Original
+                </button>
+                <button className="secondary-button compact-button" onClick={() => navigate({ screen: "path", pathId })}>
+                  <Leaf size={15} />
+                  Practice Similar
+                </button>
+              </div>
             </article>
           ))}
         </div>
       </section>
+
       <ReflectionPanel
         reflection={reflection}
         setReflection={setReflection}
+        reflectionSubmitted={reflectionSubmitted}
+        onReflectionSubmit={onReflectionSubmit}
         difficulty={difficulty}
         setDifficulty={setDifficulty}
       />
@@ -781,62 +1219,15 @@ function ProfileScreen({ experience, navigate }: { experience: StudentExperience
     <div className="screen-stack profile-screen">
       <section className="profile-hero">
         <div className="profile-avatar" aria-hidden="true">
-          <BookOpenCheck size={28} />
+          <UserRound size={28} />
         </div>
         <div>
-          <span className="small-label">Learning Profile</span>
-          <h1>{profile.identity.course}</h1>
+          <span className="small-label">My Profile</span>
+          <h1>Plant learner</h1>
           <div className="chip-row compact-row">
-            <span className="chip">{profile.identity.unit}</span>
-            <span className="chip">{profile.identity.unitTitle}</span>
-            <span className="chip">Mock profile</span>
+            <span className="chip">Prototype</span>
+            <span className="chip">Grade 7 English</span>
           </div>
-        </div>
-      </section>
-
-      <section className="profile-summary-grid" aria-label="Student summary">
-        <ProfileFact label="Course" value={profile.identity.course} />
-        <ProfileFact label="Unit Topic" value={profile.identity.unitTitle} />
-        <ProfileFact label="Learning Focus" value={profile.identity.focus} />
-        <ProfileFact label="Strategy Preference" value={profile.identity.preference} />
-      </section>
-
-      <section className="profile-panel">
-        <div className="section-title-row">
-          <h2>Learning Credits</h2>
-          <Award size={18} />
-        </div>
-        <div className="credit-grid">
-          {profile.credits.map((credit) => (
-            <article key={credit.label} className="credit-card">
-              <strong>{credit.label}</strong>
-              <span>{credit.badge}</span>
-              <small>{credit.detail}</small>
-              <LevelBar level={credit.level} />
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="profile-panel">
-        <div className="section-title-row">
-          <div>
-            <h2>Past Accuracy</h2>
-            <span className="small-note">Mock progress</span>
-          </div>
-          <BarChart3 size={18} />
-        </div>
-        <div className="accuracy-grid">
-          {profile.accuracy.map((item) => (
-            <article key={item.label} className="accuracy-card">
-              <div>
-                <strong>{item.label}</strong>
-                <span>{item.value}%</span>
-              </div>
-              <LevelBar level={item.value} />
-              <small>{item.detail}</small>
-            </article>
-          ))}
         </div>
       </section>
 
@@ -844,7 +1235,7 @@ function ProfileScreen({ experience, navigate }: { experience: StudentExperience
         <div className="section-title-row">
           <div>
             <h2>Ability Profile</h2>
-            <span className="small-note">Updated today</span>
+            <span className="small-note">Strong · Growing · Needs Practice</span>
           </div>
           <BadgeCheck size={18} />
         </div>
@@ -861,27 +1252,6 @@ function ProfileScreen({ experience, navigate }: { experience: StudentExperience
               </article>
             ))}
           </div>
-        </div>
-      </section>
-
-      <section className="profile-panel">
-        <div className="section-title-row">
-          <h2>Review Collection</h2>
-          <button className="text-button compact-link" onClick={() => navigate({ screen: "path", pathId })}>
-            Path
-          </button>
-        </div>
-        <div className="review-list">
-          {profile.reviewItems.map((item) => (
-            <article key={item.taskId} className="review-card">
-              <span className="step-pill">{item.label}</span>
-              <strong>{item.title}</strong>
-              <small>{item.focus} · {item.lastResult}</small>
-              <button className="secondary-button compact-button" onClick={() => navigate({ screen: "task", taskId: item.taskId })}>
-                Review
-              </button>
-            </article>
-          ))}
         </div>
       </section>
 
@@ -920,23 +1290,40 @@ function ProfileScreen({ experience, navigate }: { experience: StudentExperience
           ))}
         </div>
       </section>
-    </div>
-  );
-}
 
-function ProfileFact({ label, value }: { label: string; value: string }) {
-  return (
-    <article>
-      <span className="small-label">{label}</span>
-      <strong>{value}</strong>
-    </article>
-  );
-}
+      <section className="profile-panel">
+        <div className="section-title-row">
+          <h2>My Badges</h2>
+          <Award size={18} />
+        </div>
+        <div className="badge-grid">
+          {profile.badges.map((badge) => (
+            <article key={badge.label} className="badge-card">
+              <Award size={19} />
+              <strong>{badge.label}</strong>
+              <small>{badge.detail}</small>
+            </article>
+          ))}
+        </div>
+      </section>
 
-function LevelBar({ level }: { level: number }) {
-  return (
-    <div className="level-bar" aria-hidden="true">
-      <span style={{ width: `${level}%` }} />
+      <section className="profile-panel class-card">
+        <div className="section-title-row">
+          <h2>My Class</h2>
+          <UserRound size={18} />
+        </div>
+        <div className="class-card-body">
+          <div>
+            <strong>{profile.classInfo.name}</strong>
+            <span>{profile.classInfo.group}</span>
+            <small>Weekly goal: {profile.classInfo.weeklyGoal}</small>
+          </div>
+          <button className="secondary-button compact-button" onClick={() => navigate({ screen: "path", pathId })}>
+            <Route size={15} />
+            Start path
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -982,10 +1369,10 @@ function AbilityRadar({ abilities }: { abilities: StudentProfileSummary["abiliti
 function shortAbilityLabel(label: string): string {
   const labels: Record<string, string> = {
     "Vocabulary Understanding": "Vocab",
-    "Sentence Comprehension": "Sentence",
-    "Reading Sequence": "Sequence",
+    "Sentence Comprehension": "Sent",
+    "Process Sequencing": "Seq",
     "Evidence Use": "Evidence",
-    "Reflection Quality": "Reflect",
+    "Explanation Quality": "Explain",
   };
   return labels[label] ?? label;
 }
@@ -1030,11 +1417,15 @@ function ThinkingRadar({ skills }: { skills: StudentProfileSummary["thinkingSkil
 function ReflectionPanel({
   reflection,
   setReflection,
+  reflectionSubmitted,
+  onReflectionSubmit,
   difficulty,
   setDifficulty,
 }: {
   reflection: string;
   setReflection: (value: string) => void;
+  reflectionSubmitted: boolean;
+  onReflectionSubmit: () => void;
   difficulty: string;
   setDifficulty: (value: string) => void;
 }) {
@@ -1064,6 +1455,11 @@ function ReflectionPanel({
           </button>
         ))}
       </div>
+      <button className="primary-button reflection-submit" type="button" onClick={onReflectionSubmit}>
+        <Send size={17} />
+        Submit
+      </button>
+      {reflectionSubmitted && <div className="submit-confirmation">Reflection submitted</div>}
     </section>
   );
 }
@@ -1156,22 +1552,9 @@ function StatusPill({ status }: { status: SafeTaskCard["status"] }) {
   return <span className={`status-pill ${status.toLowerCase()}`}>{formatTaskStatus(status)}</span>;
 }
 
-function personaFocusLabel(personaId: string): string {
-  if (personaId === "persona_a") {
-    return "Vocabulary foundation";
-  }
-  if (personaId === "persona_b") {
-    return "Reading support";
-  }
-  if (personaId === "persona_c") {
-    return "Writing stretch";
-  }
-  return "Unit 6 focus";
-}
-
 function formatPathStatus(status: string): string {
   if (status === "PUBLISHED") {
-    return "Published";
+    return "Ready";
   }
   return String(status).toLowerCase().replace(/_/g, " ");
 }

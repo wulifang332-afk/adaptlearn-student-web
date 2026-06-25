@@ -21,8 +21,6 @@ export type StudentId = (typeof STUDENT_IDS)[number];
 
 export const COURSE_OPTIONS = [
   { id: "grade7_english", label: "Grade 7 English" },
-  { id: "high_school_english", label: "High School English" },
-  { id: "high_school_math", label: "High School Math" },
 ] as const;
 export type CourseId = (typeof COURSE_OPTIONS)[number]["id"];
 
@@ -92,10 +90,11 @@ export type StudentProfileSummary = {
     detail: string;
     level: number;
   }>;
+  creditTotal: number;
   reviewItems: Array<{
     taskId: string;
     title: string;
-    label: "Needs Review" | "Try Again" | "Review Focus";
+    label: "Needs Review" | "Try Again";
     focus: string;
     lastResult: string;
   }>;
@@ -118,6 +117,15 @@ export type StudentProfileSummary = {
     next: string;
   }>;
   strategies: string[];
+  badges: Array<{
+    label: string;
+    detail: string;
+  }>;
+  classInfo: {
+    name: string;
+    group: string;
+    weeklyGoal: string;
+  };
 };
 
 export type StudentExperience = {
@@ -232,7 +240,7 @@ export const buildStudentExperience = (
       goal: translatePathGoal(activePath.path_id, activePath.goal),
       version: activePath.version,
       status: activePath.status,
-      totalMinutes: activePath.steps.reduce((total, step) => total + step.minutes, 0),
+      totalMinutes: taskCards.reduce((total, step) => total + step.minutes, 0),
       completedCount: taskCards.filter((card) => card.status === "COMPLETED").length,
       totalCount: taskCards.length,
       goalTags: PATH_GOAL_TAGS[activePath.path_id] ?? ["Unit 6"],
@@ -257,7 +265,7 @@ export const buildTaskCards = (
     return [];
   }
 
-  return path.steps.map((step) => {
+  return getStudentFacingPathSteps(path).map((step) => {
     const task = runtime.api.fixture.tasks.find((candidate) => candidate.task_id === step.task_id);
     if (!task) {
       throw new Error(`Missing task fixture: ${step.task_id}`);
@@ -271,10 +279,10 @@ export const buildTaskCards = (
       taskId: task.task_id,
       title: translateTaskTitle(task),
       module: task.module,
-      taskType: translateTaskType(task.task_type),
+      taskType: translateTaskType(task),
       prompt: translateTaskPrompt(task),
-      responseFormat: translateResponseFormat(task.response_format),
-      bloom: translateBloom(task.bloom),
+      responseFormat: translateResponseFormat(task),
+      bloom: translateBloom(task),
       thinking: translateThinking(task.thinking_primary),
       difficulty: translateDifficulty(task.difficulty),
       minutes: step.minutes,
@@ -287,6 +295,19 @@ export const buildTaskCards = (
       riskLabel: riskToStudentLabel(task.review_risk),
     };
   });
+};
+
+const getStudentFacingPathSteps = (path: LearningPath): PathStep[] => {
+  if (path.path_id !== "PTH01") {
+    return path.steps;
+  }
+
+  const baselineStatusByTask = new Map(path.steps.map((step) => [step.task_id, step.status]));
+
+  return PTH01_STUDENT_STEPS.map((step) => ({
+    ...step,
+    status: baselineStatusByTask.get(step.task_id) ?? step.status,
+  }));
 };
 
 export const markTaskCompleteAndUnlockNext = (
@@ -410,6 +431,7 @@ const buildStudentProfileSummary = (
         level: clampLevel(42 + evidenceCount * 18),
       },
     ],
+    creditTotal: 128 + completedPracticeCount * 8 + evidenceCount * 3,
     reviewItems,
     accuracy: buildAccuracyItems(profile, completedTaskCount, totalTaskCount),
     abilities: abilityItems,
@@ -421,6 +443,17 @@ const buildStudentProfileSummary = (
       "Check sequence words",
       "Review key plant vocabulary",
     ],
+    badges: [
+      { label: "Vocabulary Builder", detail: "Plant words" },
+      { label: "Evidence Finder", detail: "Proof words" },
+      { label: "Sequence Starter", detail: "Process order" },
+      { label: "Reflection Rookie", detail: "Daily check-in" },
+    ],
+    classInfo: {
+      name: "Class 7A",
+      group: "Unit 6 Group",
+      weeklyGoal: "Finish 6-step path",
+    },
   };
 };
 
@@ -438,7 +471,7 @@ const buildAbilityItems = (profile: LearnerProfile): StudentProfileSummary["abil
     note: "Meaning in text",
   },
   {
-    label: "Reading Sequence",
+    label: "Process Sequencing",
     band: bandFromLevel(averageMastery(profile, ["DS01", "SR04", "DS09"])),
     level: averageMastery(profile, ["DS01", "SR04", "DS09"]),
     note: "Process steps",
@@ -450,10 +483,10 @@ const buildAbilityItems = (profile: LearnerProfile): StudentProfileSummary["abil
     note: "Proof words",
   },
   {
-    label: "Reflection Quality",
+    label: "Explanation Quality",
     band: bandFromLevel(averageMastery(profile, ["SW01", "SW03", "SW06"])),
     level: averageMastery(profile, ["SW01", "SW03", "SW06"]),
-    note: "Check work",
+    note: "Clear reasons",
   },
 ];
 
@@ -523,18 +556,25 @@ const buildReviewItems = (taskCards: SafeTaskCard[]): StudentProfileSummary["rev
       lastResult: "Plant words",
     },
     {
-      taskId: findTaskId("UI03", /photosynthesis steps/i),
-      title: "Put plant growth steps in order",
+      taskId: findTaskId("UI02", /photosynthesis inputs/i),
+      title: "Classify photosynthesis inputs",
       label: "Try Again",
-      focus: "Reading Sequence",
-      lastResult: "Order words",
+      focus: "Inputs and outputs",
+      lastResult: "Sort cards",
     },
     {
-      taskId: findTaskId("UI04", /best title/i),
-      title: "Choose evidence words",
-      label: "Review Focus",
-      focus: "Evidence Use",
-      lastResult: "Proof words",
+      taskId: findTaskId("UI03", /photosynthesis steps/i),
+      title: "Order photosynthesis steps",
+      label: "Try Again",
+      focus: "Process Sequencing",
+      lastResult: "Step order",
+    },
+    {
+      taskId: findTaskId("UI04", /best explanation/i),
+      title: "Choose the best explanation",
+      label: "Try Again",
+      focus: "Explanation Quality",
+      lastResult: "Evidence reason",
     },
   ];
 };
@@ -675,22 +715,73 @@ const explainStepForStudent = (step: PathStep, nodeNames: string[]): string => {
 
 const riskToStudentLabel = (risk: Task["review_risk"]): string => {
   if (risk === "\u9ad8") {
-    return "Teacher review";
+    return "Extra review";
   }
   if (risk === "\u4e2d") {
-    return "Teacher check";
+    return "Check again";
   }
   return "Mock feedback";
 };
 
+const PTH01_STUDENT_STEPS: PathStep[] = [
+  {
+    step_no: 1,
+    task_id: "UI01",
+    target_node_ids: ["VOC01", "TT02"],
+    minutes: 3,
+    rationale: "Remember plant-part words.",
+    status: "AVAILABLE",
+  },
+  {
+    step_no: 2,
+    task_id: "UI02",
+    target_node_ids: ["VOC02", "VOC03"],
+    minutes: 4,
+    rationale: "Understand inputs and outputs.",
+    status: "LOCKED",
+  },
+  {
+    step_no: 3,
+    task_id: "UI03",
+    target_node_ids: ["DS01", "SR04"],
+    minutes: 5,
+    rationale: "Apply the process sequence.",
+    status: "LOCKED",
+  },
+  {
+    step_no: 4,
+    task_id: "UI08",
+    target_node_ids: ["DS02", "VOC02", "VOC03"],
+    minutes: 4,
+    rationale: "Analyze a missing sunlight scenario.",
+    status: "LOCKED",
+  },
+  {
+    step_no: 5,
+    task_id: "UI04",
+    target_node_ids: ["DS04", "SR06", "DS12"],
+    minutes: 6,
+    rationale: "Evaluate explanations with evidence.",
+    status: "LOCKED",
+  },
+  {
+    step_no: 6,
+    task_id: "UI17",
+    target_node_ids: ["DS01", "SW03"],
+    minutes: 6,
+    rationale: "Create an oral retelling.",
+    status: "LOCKED",
+  },
+];
+
 const PATH_GOAL_LABELS: Record<string, string> = {
-  PTH01: "Plant vocabulary",
+  PTH01: "Plant vocabulary and process",
   PTH03: "Reading summary",
   PTH05: "Culture comparison",
 };
 
 const PATH_GOAL_TAGS: Record<string, string[]> = {
-  PTH01: ["Plant vocabulary", "Process order"],
+  PTH01: ["6 Bloom steps", "Plant process"],
   PTH03: ["Main idea", "Inference"],
   PTH05: ["Tea culture", "Short paragraph"],
 };
@@ -730,12 +821,13 @@ const personaPreferenceLabel = (personaId: string): string => {
 const TASK_TITLES: Record<string, string> = {
   UI01: "Label the parts of a plant",
   UI02: "Classify photosynthesis inputs and outputs",
-  UI03: "Order the photosynthesis steps",
-  UI04: "Choose the best title for an explanation",
+  UI03: "Build the photosynthesis process",
+  UI04: "Choose the best explanation",
+  UI08: "Find what changes when sunlight is missing",
   UI09: "Summarize a paragraph in one sentence",
   UI10: "Turn a text into a process chart",
   UI16: "Explain a double meaning in the title",
-  UI17: "Explain photosynthesis in 45 seconds",
+  UI17: "Retell photosynthesis in your own words",
   UI20: "Answer an inference question with evidence",
   RF04: "Sort recent mistakes by cause",
   RW02: "Find details in a Chinese tea story",
@@ -750,13 +842,14 @@ const TASK_TITLES: Record<string, string> = {
 
 const TASK_PROMPTS: Record<string, string> = {
   UI01: "Match each plant word to the diagram.",
-  UI02: "Sort inputs and outputs.",
-  UI03: "Put the steps in order.",
-  UI04: "Choose the best title.",
+  UI02: "Sort each card into the best group.",
+  UI03: "Build the process from first to last.",
+  UI04: "Pick the strongest explanation and reason.",
+  UI08: "Choose what changes and why.",
   UI09: "Write one short summary sentence.",
   UI10: "Complete the process chart.",
   UI16: "Explain the double meaning of plant.",
-  UI17: "Speak through the process chart.",
+  UI17: "Record a short retelling.",
   UI20: "Answer with one piece of evidence.",
   RF04: "Sort recent mistakes by cause.",
   RW02: "Find details in a Chinese tea story.",
@@ -767,6 +860,31 @@ const TASK_PROMPTS: Record<string, string> = {
   RW11: "Plan a short paragraph.",
   RW12: "Write the short paragraph.",
   RW13: "Check and revise your writing.",
+};
+
+const TASK_BLOOM_OVERRIDES: Record<string, string> = {
+  UI01: "Remember",
+  UI02: "Understand",
+  UI03: "Apply",
+  UI08: "Analyze",
+  UI04: "Evaluate",
+  UI17: "Create",
+};
+
+const TASK_TYPE_OVERRIDES: Record<string, string> = {
+  UI02: "Classification",
+  UI03: "Process builder",
+  UI08: "Cause and effect",
+  UI04: "Explanation choice",
+  UI17: "Oral retelling",
+};
+
+const RESPONSE_FORMAT_OVERRIDES: Record<string, string> = {
+  UI02: "Classification cards",
+  UI03: "Sequence cards",
+  UI08: "Option cards",
+  UI04: "Choice and reason",
+  UI17: "Simulated voice",
 };
 
 const NODE_LABELS: Record<string, string> = {
@@ -865,7 +983,7 @@ const TERM_TRANSLATIONS: Record<string, string> = {
   "\u6d41\u7a0b\u6392\u5e8f": "Process sequencing",
   "\u6807\u9898\u9009\u62e9": "Title choice",
   "\u6bb5\u843d\u6458\u8981": "Paragraph summary",
-  "\u5f00\u653e\u77ed\u7b54": "Open short answer",
+  "\u5f00\u653e\u77ed\u7b54": "Short answer",
   "\u53e3\u5934\u590d\u8ff0": "Oral retelling",
   "\u8bc1\u636e\u77ed\u7b54": "Evidence short answer",
   "\u9519\u8bef\u53cd\u601d": "Mistake reflection",
@@ -903,11 +1021,13 @@ const translateTaskTitle = (task: Task): string => TASK_TITLES[task.task_id] ?? 
 const translateTaskPrompt = (task: Task): string =>
   TASK_PROMPTS[task.task_id] ?? safeEnglishFallback(task.student_prompt, "Complete this Unit 6 practice task.");
 
-const translateTaskType = (taskType: string): string => translateTerm(taskType);
+const translateTaskType = (task: Task): string => TASK_TYPE_OVERRIDES[task.task_id] ?? translateTerm(task.task_type);
 
-const translateResponseFormat = (responseFormat: string): string => translateTerm(responseFormat);
+const translateResponseFormat = (task: Task): string =>
+  RESPONSE_FORMAT_OVERRIDES[task.task_id] ?? translateTerm(task.response_format);
 
-const translateBloom = (bloom: string): string => bloom.split("|").map(translateTerm).join(" / ");
+const translateBloom = (task: Task): string =>
+  TASK_BLOOM_OVERRIDES[task.task_id] ?? task.bloom.split("|").map(translateTerm).join(" / ");
 
 const translateThinking = (thinking: string): string => translateTerm(thinking);
 

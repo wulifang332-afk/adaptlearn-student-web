@@ -17,12 +17,12 @@ describe("student web shared foundation integration", () => {
     expect(experience.student.persona_id).toBe("persona_a");
     expect(experience.activePath?.pathId).toBe("PTH01");
     expect(experience.activePath?.studentExplanation).toBe("Ready path");
-    expect(experience.activePath?.goalTags).toEqual(["Plant vocabulary", "Process order"]);
+    expect(experience.activePath?.goalTags).toEqual(["6 Bloom steps", "Plant process"]);
     expect(experience.simulationNotice).toBe("Prototype data");
     expect(experience.studentProfile.identity.focus).toBe("Vocabulary foundation");
     expect(JSON.stringify(experience)).not.toContain("teacher_text");
     expect(JSON.stringify(experience)).not.toContain("mock-rule-v0");
-    expect(experience.taskCards).toHaveLength(5);
+    expect(experience.taskCards).toHaveLength(6);
   });
 
   it("keeps the student-facing experience model English-only", () => {
@@ -73,7 +73,7 @@ describe("student web shared foundation integration", () => {
       ["rank", "ing"].join(""),
     ];
 
-    expect(courseLabels).toEqual(["Grade 7 English", "High School English", "High School Math"]);
+    expect(courseLabels).toEqual(["Grade 7 English"]);
     expect(courseLabels.join(" ")).not.toContain(["Persona", "A"].join(" "));
     expect(courseLabels.join(" ")).not.toContain(["Persona", "B"].join(" "));
     expect(courseLabels.join(" ")).not.toContain(["Persona", "C"].join(" "));
@@ -89,6 +89,7 @@ describe("student web shared foundation integration", () => {
     expect(profile.credits.map((credit) => credit.label)).toEqual(
       expect.arrayContaining(["Practice Credits", "Reflection Credits", "Vocabulary Builder", "Evidence Collector"]),
     );
+    expect(profile.creditTotal).toBeGreaterThanOrEqual(128);
     expect(profile.accuracy.map((item) => item.label)).toEqual(
       expect.arrayContaining([
         "Overall accuracy",
@@ -98,15 +99,23 @@ describe("student web shared foundation integration", () => {
       ]),
     );
     expect(profile.reviewItems.map((item) => item.label)).toEqual(
-      expect.arrayContaining(["Needs Review", "Try Again", "Review Focus"]),
+      expect.arrayContaining(["Needs Review", "Try Again"]),
+    );
+    expect(profile.reviewItems.map((item) => item.title)).toEqual(
+      expect.arrayContaining([
+        "Label root and stem",
+        "Classify photosynthesis inputs",
+        "Order photosynthesis steps",
+        "Choose the best explanation",
+      ]),
     );
     expect(profile.abilities.map((ability) => ability.label)).toEqual(
       expect.arrayContaining([
         "Vocabulary Understanding",
         "Sentence Comprehension",
-        "Reading Sequence",
+        "Process Sequencing",
         "Evidence Use",
-        "Reflection Quality",
+        "Explanation Quality",
       ]),
     );
     expect(profile.thinkingSkills.map((skill) => skill.label)).toEqual(
@@ -114,6 +123,14 @@ describe("student web shared foundation integration", () => {
     );
     expect(profile.thinkingSkills.every((skill) => skill.level > 0)).toBe(true);
     expect(profile.strategies).toContain("Read aloud");
+    expect(profile.badges.map((badge) => badge.label)).toEqual(
+      expect.arrayContaining(["Vocabulary Builder", "Evidence Finder", "Sequence Starter", "Reflection Rookie"]),
+    );
+    expect(profile.classInfo).toMatchObject({
+      name: "Class 7A",
+      group: "Unit 6 Group",
+      weeklyGoal: "Finish 6-step path",
+    });
     expect(profileCopy).not.toMatch(/\p{Script=Han}/u);
     blockedInternalCopy.forEach((copy) => {
       expect(profileCopy).not.toContain(copy);
@@ -135,6 +152,29 @@ describe("student web shared foundation integration", () => {
 
     expect(overrides.UI01).toBe("COMPLETED");
     expect(overrides.UI02).toBe("AVAILABLE");
+  });
+
+  it("presents PTH01 as a six-step Bloom-aligned student path", () => {
+    const runtime = createStudentRuntime();
+    const experience = buildStudentExperience(runtime, "stu_persona_a");
+
+    expect(experience.taskCards.map((card) => card.bloom)).toEqual([
+      "Remember",
+      "Understand",
+      "Apply",
+      "Analyze",
+      "Evaluate",
+      "Create",
+    ]);
+    expect(experience.taskCards.map((card) => card.title)).toEqual([
+      "Label the parts of a plant",
+      "Classify photosynthesis inputs and outputs",
+      "Build the photosynthesis process",
+      "Find what changes when sunlight is missing",
+      "Choose the best explanation",
+      "Retell photosynthesis in your own words",
+    ]);
+    expect(experience.activePath?.totalCount).toBe(6);
   });
 
   it("parses and serializes student routes", () => {
