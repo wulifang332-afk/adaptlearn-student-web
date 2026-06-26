@@ -8,7 +8,7 @@ export default async function AgentMonitoringPage() {
     <FeatureListPage
       title="Agent Run Summaries"
       eyebrow="Business-scoped agent visibility"
-      description="Summaries show workflow status, citation coverage, guardrail outcome, ReviewCase link, and trace link. Tool registry and prompt/model registry stay in Foundation."
+      description="Summaries show workflow status, citation coverage, guardrail outcome, ReviewCase link, and trace link. Technical configuration stays outside Admin Web."
       guardrail="Business summaries only"
       rows={rows}
       columns={[

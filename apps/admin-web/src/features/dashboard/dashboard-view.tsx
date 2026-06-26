@@ -116,7 +116,7 @@ export function DashboardView({ data }: { data?: AdminDashboardData }) {
             <span className="section-label">Monitoring business summaries</span>
             <h2>LMS, agent, audit status</h2>
           </div>
-          <StatusBadge tone="neutral">Trace links open Foundation</StatusBadge>
+          <StatusBadge tone="neutral">Trace links available</StatusBadge>
         </div>
         <div className="monitor-strip">
           {view.monitoringRows.map((row) => (

@@ -9,7 +9,7 @@ export default async function LmsMonitoringPage() {
       title="LMS Sync Monitoring"
       eyebrow="Business retry and compensation"
       description="Retry scoped sync jobs and record compensation after external verification. LMS state cannot make an unpublished path visible."
-      guardrail="MockLmsAdapter summary only"
+      guardrail="Business sync summary only"
       rows={rows}
       columns={[
         { key: "workflow", header: "Workflow" },

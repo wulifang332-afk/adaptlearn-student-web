@@ -20,8 +20,8 @@ export default async function MonitoringPage() {
       <PageHeader
         title="Monitoring Business Summaries"
         eyebrow="Admin operations"
-        description="Inspect business-scoped LMS sync, dead letters, agent summaries, trace links, ReviewCase backlog, and audit coverage without platform configuration controls."
-        actions={<StatusBadge tone="neutral">Full trace explorer remains Foundation</StatusBadge>}
+        description="Inspect business-scoped LMS sync, dead letters, agent summaries, trace links, ReviewCase backlog, and audit coverage without technical configuration controls."
+        actions={<StatusBadge tone="neutral">Authorized trace summaries</StatusBadge>}
       />
       <DataTable
         rows={rows}

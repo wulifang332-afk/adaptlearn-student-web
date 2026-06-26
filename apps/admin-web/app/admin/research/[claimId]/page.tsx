@@ -17,7 +17,7 @@ export default async function ResearchDetailPage({ params }: { params: Promise<{
       <PageHeader
         title={String(claim.claim)}
         eyebrow="Research claim"
-        description="Research evidence agents can propose claim/evidence links, but expert decision is required before registry publication."
+        description="Research evidence agents can propose claim/evidence links, but expert decision is required before classroom use."
         actions={<StatusBadge tone="warning">{String(claim.status)}</StatusBadge>}
       />
       <section className="panel">

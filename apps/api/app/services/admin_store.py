@@ -257,7 +257,7 @@ CONTENT_ROWS = [
         "module": "Unit 6 overview",
         "status": "PUBLISHED_LOCKED",
         "source": "Textbook packet, pages 42-47",
-        "copyright": "Cleared for mock",
+        "copyright": "Cleared for classroom use",
         "version": "v1",
         "href": "/admin/content/cnt_u6_packet_v1",
         "meta": "cnt_u6_packet_v1",
