@@ -650,10 +650,14 @@ button:disabled {
 .answer-slot select {
   width: 100%;
   min-height: 38px;
+  padding: 0 8px;
   border: 1px solid var(--border);
   border-radius: 6px;
   background: #ffffff;
   color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .task-actions,
@@ -693,6 +697,10 @@ button:disabled {
   font-size: 0.88rem;
   font-weight: 800;
   line-height: 1.35;
+}
+
+.result-action-button {
+  width: 100%;
 }
 
 .feedback-meter {
@@ -816,6 +824,10 @@ button:disabled {
   padding: 11px;
 }
 
+.classification-card.similar-card {
+  min-height: 112px;
+}
+
 .term-icon {
   width: 44px;
   height: 44px;
@@ -876,6 +888,15 @@ button:disabled {
   border-color: rgba(22, 132, 95, 0.45);
   background: #e8f7f0;
   color: var(--accent-dark);
+}
+
+.mini-choice-row button:disabled,
+.reason-chip-grid button:disabled,
+.sequence-card-grid button:disabled,
+.cause-effect-grid button:disabled,
+.explanation-list button:disabled,
+.answer-slot select:disabled {
+  opacity: 0.68;
 }
 
 .sort-zone-grid {
@@ -999,6 +1020,13 @@ button:disabled {
   padding: 11px;
 }
 
+.task-helper-copy {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  line-height: 1.35;
+}
+
 .because-strip {
   display: flex;
   flex-wrap: wrap;
@@ -1022,6 +1050,14 @@ button:disabled {
   width: 100%;
   padding: 11px;
   line-height: 1.35;
+}
+
+.explanation-list small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 0.76rem;
+  line-height: 1.3;
 }
 
 .reason-chip-grid {
@@ -1639,6 +1675,14 @@ button:disabled {
 .class-card-body span {
   color: var(--sky);
   font-weight: 900;
+}
+
+.class-chat-button {
+  flex: 0 0 auto;
+  gap: 5px;
+  min-width: 136px;
+  padding: 0 11px;
+  white-space: nowrap;
 }
 
 .compact-link {

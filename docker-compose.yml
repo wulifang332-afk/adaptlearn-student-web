@@ -1,0 +1,63 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./apps/api
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      ADAPTLEARN_DEV_MOCK_AUTH: "true"
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+
+  web:
+    build:
+      context: .
+      dockerfile: ./apps/web/Dockerfile
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:8000
+    ports:
+      - "3000:3000"
+    depends_on:
+      - api
+
+  admin-web:
+    build:
+      context: .
+      dockerfile: ./apps/admin-web/Dockerfile
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:8000
+      NEXT_PUBLIC_ADMIN_DATA_SOURCE: mock
+    ports:
+      - "3001:3001"
+    depends_on:
+      - api
+
+  foundation-console:
+    build:
+      context: .
+      dockerfile: ./apps/foundation-console/Dockerfile
+    env_file:
+      - path: ./.env
+        required: false
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://127.0.0.1:8000
+      FOUNDATION_API_BASE_URL: http://api:8000
+    ports:
+      - "3002:3002"
+    depends_on:
+      - api

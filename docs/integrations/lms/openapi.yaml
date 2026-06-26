@@ -1,0 +1,134 @@
+openapi: 3.1.0
+info:
+  title: AdaptLearn Generic LMS Adapter Contract
+  version: 0.1.0
+  description: Mock-first LMS contract. Replace URLs and scopes when the real LMS vendor docs arrive.
+servers:
+  - url: https://lms.example.invalid
+security:
+  - clientCredentials:
+      - classes:read
+      - assignments:write
+      - submissions:write
+      - grades:write
+      - users:read
+paths:
+  /oauth/token:
+    post:
+      summary: OAuth 2.0 client credentials token
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              type: object
+              required: [grant_type, client_id, client_secret, scope]
+              properties:
+                grant_type:
+                  type: string
+                  const: client_credentials
+                client_id:
+                  type: string
+                client_secret:
+                  type: string
+                scope:
+                  type: string
+      responses:
+        "200":
+          description: Access token
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  access_token:
+                    type: string
+                  token_type:
+                    type: string
+                  expires_in:
+                    type: integer
+  /classes/{class_id}/roster:
+    get:
+      summary: Pull class roster
+      parameters:
+        - name: class_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Class roster
+  /assignments:
+    post:
+      summary: Publish AdaptLearn learning path as LMS assignment
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [path_id, student_id, title, due_at, task_ids, status]
+              properties:
+                path_id:
+                  type: string
+                student_id:
+                  type: string
+                title:
+                  type: string
+                due_at:
+                  type: string
+                  format: date-time
+                task_ids:
+                  type: array
+                  items:
+                    type: string
+                status:
+                  type: string
+      responses:
+        "201":
+          description: Assignment created
+  /submissions:
+    post:
+      summary: Sync submission status and formative feedback summary
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [submission_id, task_id, student_id, status, submitted_at]
+              properties:
+                submission_id:
+                  type: string
+                task_id:
+                  type: string
+                student_id:
+                  type: string
+                status:
+                  type: string
+                submitted_at:
+                  type: string
+                  format: date-time
+                score_label:
+                  type: string
+                feedback_summary:
+                  type: string
+                review_pending:
+                  type: boolean
+      responses:
+        "202":
+          description: Submission accepted
+components:
+  securitySchemes:
+    clientCredentials:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: /oauth/token
+          scopes:
+            classes:read: Read class roster
+            assignments:write: Publish assignments
+            submissions:write: Sync submissions
+            grades:write: Sync formative score labels
+            users:read: Resolve user mappings

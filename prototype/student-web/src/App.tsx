@@ -47,9 +47,12 @@ type LastFeedback = {
   taskId: string;
   title: string;
   submissionStatus: string;
+  feedbackKind: "score" | "speaking" | "practice";
   correctCount: number;
   totalCount: number;
   resultText: string;
+  summary: string;
+  detail: string;
 };
 
 type PlantLabelKey = "root" | "stem" | "leaf" | "seed";
@@ -61,6 +64,13 @@ type AnalyzeChoiceKey = "glucose" | "oxygen" | "growth" | "water";
 type ExplanationChoiceKey = "strong" | "soil" | "green";
 type EvaluationReasonKey = "evidence" | "sequence" | "causeEffect" | "missingVocabulary";
 type RecordingState = "idle" | "recording" | "saved";
+type SimilarLabelKey = "leaf" | "flower" | "seed";
+type SimilarLabelTargetKey = "top" | "middle" | "bottom";
+type SimilarExchangeTermKey = "water" | "carbonDioxide" | "oxygen" | "glucose" | "soil" | "sunlight";
+type SimilarExchangeZoneKey = "takenIn" | "givenOut" | "notUsed";
+type SimilarExchangeAnswer = Record<SimilarExchangeTermKey, SimilarExchangeZoneKey | "">;
+type SimilarSequenceStepKey = "sunlight" | "glucose" | "oxygen";
+type SimilarExplanationKey = "better" | "weaker";
 
 const labelOptions: PlantLabelKey[] = ["root", "stem", "leaf", "seed"];
 const plantTargets: Array<{ key: PlantLabelKey; label: string; helper: string }> = [
@@ -68,6 +78,13 @@ const plantTargets: Array<{ key: PlantLabelKey; label: string; helper: string }>
   { key: "stem", label: "B", helper: "supports the plant" },
   { key: "seed", label: "C", helper: "new plant starter" },
   { key: "root", label: "D", helper: "under the soil" },
+];
+
+const similarLabelOptions: SimilarLabelKey[] = ["leaf", "flower", "seed"];
+const similarPlantTargets: Array<{ key: SimilarLabelTargetKey; correct: SimilarLabelKey; label: string; helper: string }> = [
+  { key: "top", correct: "flower", label: "A", helper: "bright part where seeds can form" },
+  { key: "middle", correct: "leaf", label: "B", helper: "wide green part" },
+  { key: "bottom", correct: "seed", label: "C", helper: "new plant starter" },
 ];
 
 const classificationTerms: Array<{ key: ClassificationTermKey; label: string; shortLabel: string }> = [
@@ -94,6 +111,21 @@ const expectedClassification: Record<ClassificationTermKey, ClassificationZoneKe
   chlorophyll: "helps",
 };
 
+const similarExchangeTerms: Array<{ key: SimilarExchangeTermKey; label: string }> = [
+  { key: "water", label: "water" },
+  { key: "carbonDioxide", label: "carbon dioxide" },
+  { key: "oxygen", label: "oxygen" },
+  { key: "glucose", label: "glucose" },
+  { key: "soil", label: "soil" },
+  { key: "sunlight", label: "sunlight" },
+];
+
+const similarExchangeZones: Array<{ key: SimilarExchangeZoneKey; label: string }> = [
+  { key: "takenIn", label: "Taken in" },
+  { key: "givenOut", label: "Given out" },
+  { key: "notUsed", label: "Not used here" },
+];
+
 const processSteps: Array<{ key: ProcessStepKey; label: string }> = [
   { key: "water", label: "Roots take in water" },
   { key: "carbon", label: "Leaves take in carbon dioxide" },
@@ -102,8 +134,14 @@ const processSteps: Array<{ key: ProcessStepKey; label: string }> = [
   { key: "oxygen", label: "Oxygen is released" },
 ];
 
+const similarSequenceSteps: Array<{ key: SimilarSequenceStepKey; label: string }> = [
+  { key: "sunlight", label: "Sunlight reaches a leaf" },
+  { key: "glucose", label: "Leaf cells make glucose" },
+  { key: "oxygen", label: "Oxygen leaves the leaf" },
+];
+
 const analyzeOptions: Array<{ key: AnalyzeChoiceKey; label: string; detail: string }> = [
-  { key: "glucose", label: "Less glucose", detail: "Sunlight gives energy to make food." },
+  { key: "glucose", label: "Less glucose", detail: "Sunlight energy helps leaf cells make glucose." },
   { key: "oxygen", label: "Less oxygen", detail: "Oxygen is released after food is made." },
   { key: "growth", label: "Slower growth", detail: "The plant has less food for growth." },
   { key: "water", label: "Water disappears", detail: "Water is still taken in by roots." },
@@ -121,6 +159,19 @@ const explanationOptions: Array<{ key: ExplanationChoiceKey; label: string }> = 
   {
     key: "green",
     label: "Leaves make oxygen because plants are green.",
+  },
+];
+
+const similarExplanationOptions: Array<{ key: SimilarExplanationKey; label: string; reason: string }> = [
+  {
+    key: "better",
+    label: "Without sunlight, the leaf has less energy to make glucose, so less oxygen is released.",
+    reason: "Uses cause and effect with evidence from the process.",
+  },
+  {
+    key: "weaker",
+    label: "Without sunlight, the plant is sad and does not want to grow.",
+    reason: "Uses feeling words instead of plant-process evidence.",
   },
 ];
 
@@ -161,6 +212,10 @@ const similarPracticeByTaskId: Record<
   },
 };
 
+const getSimilarTaskId = (taskId: string): string => `SIM_${taskId}`;
+const getSourceTaskId = (taskId: string): string => taskId.replace(/^SIM_/, "");
+const isSimilarTaskId = (taskId: string): boolean => taskId.startsWith("SIM_");
+
 export function App() {
   const runtimeRef = useRef(createStudentRuntime());
   const studentId: StudentId = "stu_persona_a";
@@ -198,6 +253,11 @@ export function App() {
     () => buildStudentExperience(runtimeRef.current, studentId, stepOverrides),
     [studentId, stepOverrides],
   );
+  const similarTaskCards = useMemo(() => buildSimilarPracticeTasks(experience.taskCards), [experience.taskCards]);
+  const allTaskCards = useMemo(
+    () => [...experience.taskCards, ...similarTaskCards],
+    [experience.taskCards, similarTaskCards],
+  );
 
   useLayoutEffect(() => {
     if (screenScrollRef.current) {
@@ -227,6 +287,7 @@ export function App() {
       return;
     }
 
+    const sourceTaskId = getSourceTaskId(task.taskId);
     const snapshot = buildTaskSnapshot({
       task,
       answers,
@@ -239,22 +300,27 @@ export function App() {
     });
     const submission = submitMockTask(runtimeRef.current, {
       learnerId: experience.student.student_id,
-      taskId: task.taskId,
+      taskId: sourceTaskId,
       pathId: experience.activePath.pathId,
       pathVersion: experience.activePath.version,
       offline: false,
     });
-    const nextOverrides = markTaskCompleteAndUnlockNext(experience.taskCards, task.taskId);
-    setStepOverrides((current) => ({ ...current, ...nextOverrides }));
+    if (!isSimilarTaskId(task.taskId)) {
+      const nextOverrides = markTaskCompleteAndUnlockNext(experience.taskCards, task.taskId);
+      setStepOverrides((current) => ({ ...current, ...nextOverrides }));
+    }
     setTaskFeedback((current) => ({
       ...current,
       [task.taskId]: {
         taskId: task.taskId,
         title: task.title,
         submissionStatus: submission.status,
+        feedbackKind: snapshot.feedbackKind,
         correctCount: snapshot.correctCount,
         totalCount: snapshot.totalCount,
         resultText: snapshot.resultText,
+        summary: snapshot.summary,
+        detail: snapshot.detail,
       },
     }));
   };
@@ -266,8 +332,12 @@ export function App() {
 
   const activeTask =
     route.screen === "task" || route.screen === "feedback"
-      ? experience.taskCards.find((task) => task.taskId === route.taskId) ?? experience.recommendedTask
+      ? allTaskCards.find((task) => task.taskId === route.taskId) ?? experience.recommendedTask
       : experience.recommendedTask;
+  const nextTask =
+    activeTask && (route.screen === "task" || route.screen === "feedback")
+      ? findNextPathTask(experience.taskCards, getSourceTaskId(activeTask.taskId))
+      : undefined;
 
   return (
     <main className="stage">
@@ -307,7 +377,9 @@ export function App() {
               recordingState={recordingState}
               setRecordingState={setRecordingState}
               submittedFeedback={taskFeedback[activeTask.taskId]}
+              nextTask={nextTask}
               onComplete={handleCompleteTask}
+              navigate={navigate}
             />
           )}
           {route.screen === "feedback" && activeTask && (
@@ -360,7 +432,7 @@ function StudentHeader({
         </span>
         <div>
           <strong>AdaptLearn</strong>
-          <span>Copilot Student</span>
+          <span>Xiaoming Zhang</span>
         </div>
       </div>
       <label className="course-picker">
@@ -534,6 +606,36 @@ function PathTaskCard({ task, navigate }: { task: SafeTaskCard; navigate: (route
   );
 }
 
+function buildSimilarPracticeTasks(taskCards: SafeTaskCard[]): SafeTaskCard[] {
+  return Object.entries(similarPracticeByTaskId).flatMap(([sourceTaskId, similarPractice]) => {
+    const sourceTask = taskCards.find((task) => task.taskId === sourceTaskId);
+    if (!sourceTask) {
+      return [];
+    }
+
+    return [
+      {
+        ...sourceTask,
+        taskId: getSimilarTaskId(sourceTask.taskId),
+        title: similarPractice.title,
+        module: "Similar Practice",
+        prompt: similarPractice.prompt,
+        bloom: similarPractice.bloom,
+        status: "AVAILABLE",
+        isActionable: true,
+      },
+    ];
+  });
+}
+
+function findNextPathTask(taskCards: SafeTaskCard[], sourceTaskId: string): SafeTaskCard | undefined {
+  const currentIndex = taskCards.findIndex((task) => task.taskId === sourceTaskId);
+  if (currentIndex < 0) {
+    return undefined;
+  }
+  return taskCards[currentIndex + 1];
+}
+
 function TaskScreen({
   task,
   answers,
@@ -553,7 +655,9 @@ function TaskScreen({
   recordingState,
   setRecordingState,
   submittedFeedback,
+  nextTask,
   onComplete,
+  navigate,
 }: {
   task: SafeTaskCard;
   answers: Record<PlantLabelKey, string>;
@@ -573,11 +677,14 @@ function TaskScreen({
   recordingState: RecordingState;
   setRecordingState: (state: RecordingState) => void;
   submittedFeedback: LastFeedback | undefined;
+  nextTask: SafeTaskCard | undefined;
   onComplete: (task: SafeTaskCard) => void;
+  navigate: (route: RouteState) => void;
 }) {
   const isSubmitted = Boolean(submittedFeedback);
+  const sourceTaskId = getSourceTaskId(task.taskId);
   const actionLabel =
-    task.taskId === "UI02" || task.taskId === "UI03" || task.taskId === "UI08" || task.taskId === "UI04"
+    sourceTaskId === "UI02" || sourceTaskId === "UI03" || sourceTaskId === "UI08" || sourceTaskId === "UI04"
       ? "Check"
       : "Submit";
 
@@ -617,11 +724,11 @@ function TaskScreen({
         isSubmitted={isSubmitted}
       />
 
-      <button className="primary-button full-width" onClick={() => onComplete(task)}>
+      <button className="primary-button full-width" onClick={() => onComplete(task)} disabled={isSubmitted}>
         <Send size={18} />
         {actionLabel}
       </button>
-      {submittedFeedback && <TaskResultCard feedback={submittedFeedback} />}
+      {submittedFeedback && <TaskResultCard feedback={submittedFeedback} nextTask={nextTask} navigate={navigate} />}
     </div>
   );
 }
@@ -665,7 +772,13 @@ function TaskInteraction({
   setRecordingState: (state: RecordingState) => void;
   isSubmitted: boolean;
 }) {
-  if (task.taskId === "UI02") {
+  const sourceTaskId = getSourceTaskId(task.taskId);
+
+  if (isSimilarTaskId(task.taskId)) {
+    return <SimilarPracticeInteraction sourceTaskId={sourceTaskId} isSubmitted={isSubmitted} />;
+  }
+
+  if (sourceTaskId === "UI02") {
     return (
       <ClassifyInputsTask
         classification={classification}
@@ -675,11 +788,17 @@ function TaskInteraction({
     );
   }
 
-  if (task.taskId === "UI03") {
-    return <BuildProcessTask processOrder={processOrder} setProcessOrder={setProcessOrder} />;
+  if (sourceTaskId === "UI03") {
+    return (
+      <BuildProcessTask
+        processOrder={processOrder}
+        setProcessOrder={setProcessOrder}
+        isSubmitted={isSubmitted}
+      />
+    );
   }
 
-  if (task.taskId === "UI08") {
+  if (sourceTaskId === "UI08") {
     return (
       <AnalyzeSunlightTask
         analyzeChoices={analyzeChoices}
@@ -689,19 +808,26 @@ function TaskInteraction({
     );
   }
 
-  if (task.taskId === "UI04") {
+  if (sourceTaskId === "UI04") {
     return (
       <EvaluateExplanationTask
         evaluateChoice={evaluateChoice}
         setEvaluateChoice={setEvaluateChoice}
         evaluateReason={evaluateReason}
         setEvaluateReason={setEvaluateReason}
+        isSubmitted={isSubmitted}
       />
     );
   }
 
-  if (task.taskId === "UI17") {
-    return <OralRetellingTask recordingState={recordingState} setRecordingState={setRecordingState} />;
+  if (sourceTaskId === "UI17") {
+    return (
+      <OralRetellingTask
+        recordingState={recordingState}
+        setRecordingState={setRecordingState}
+        isSubmitted={isSubmitted}
+      />
+    );
   }
 
   return (
@@ -742,6 +868,7 @@ function PlantLabelTask({
             </span>
             <select
               value={answers[target.key]}
+              disabled={isSubmitted}
               onChange={(event) =>
                 setAnswers({
                   ...answers,
@@ -760,7 +887,11 @@ function PlantLabelTask({
         ))}
       </div>
       <div className="task-actions">
-        <button className="secondary-button" onClick={() => setAnswers({ root: "", stem: "", leaf: "", seed: "" })}>
+        <button
+          className="secondary-button"
+          onClick={() => setAnswers({ root: "", stem: "", leaf: "", seed: "" })}
+          disabled={isSubmitted}
+        >
           <RefreshCw size={17} />
           Reset
         </button>
@@ -775,6 +906,157 @@ function PlantLabelTask({
           {answeredCount} of {plantTargets.length} labels selected
         </span>
         {isSubmitted && <span>{correctCount} of {plantTargets.length} correct</span>}
+      </div>
+    </section>
+  );
+}
+
+function SimilarPracticeInteraction({
+  sourceTaskId,
+  isSubmitted,
+}: {
+  sourceTaskId: string;
+  isSubmitted: boolean;
+}) {
+  const [labelAnswers, setLabelAnswers] = useState<Record<SimilarLabelTargetKey, SimilarLabelKey | "">>({
+    top: "",
+    middle: "",
+    bottom: "",
+  });
+  const [exchangeAnswers, setExchangeAnswers] = useState<SimilarExchangeAnswer>({
+    water: "",
+    carbonDioxide: "",
+    oxygen: "",
+    glucose: "",
+    soil: "",
+    sunlight: "",
+  });
+  const [sequenceOrder, setSequenceOrder] = useState<SimilarSequenceStepKey[]>([]);
+  const [explanationChoice, setExplanationChoice] = useState<SimilarExplanationKey | "">("");
+
+  if (sourceTaskId === "UI02") {
+    return (
+      <section className="practice-panel similar-task-panel">
+        <div className="section-title-row">
+          <h2>Daytime plant exchange</h2>
+          <Leaf size={18} />
+        </div>
+        <p className="task-helper-copy">Sort what a plant takes in and gives out during the day.</p>
+        <div className="classification-grid" aria-label="Similar photosynthesis classification cards">
+          {similarExchangeTerms.map((term) => (
+            <article key={term.key} className="classification-card similar-card">
+              <strong>{term.label}</strong>
+              <div className="mini-choice-row">
+                {similarExchangeZones.map((zone) => (
+                  <button
+                    key={zone.key}
+                    type="button"
+                    className={exchangeAnswers[term.key] === zone.key ? "selected" : ""}
+                    disabled={isSubmitted}
+                    onClick={() => setExchangeAnswers({ ...exchangeAnswers, [term.key]: zone.key })}
+                  >
+                    {zone.label}
+                  </button>
+                ))}
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (sourceTaskId === "UI03") {
+    const remainingSteps = similarSequenceSteps.filter((step) => !sequenceOrder.includes(step.key));
+    return (
+      <section className="practice-panel similar-task-panel">
+        <div className="section-title-row">
+          <h2>Order the leaf events</h2>
+          <Route size={18} />
+        </div>
+        <p className="task-helper-copy">Build the shorter path from sunlight to oxygen leaving the leaf.</p>
+        <div className="sequence-track" aria-label="Similar photosynthesis sequence">
+          {Array.from({ length: similarSequenceSteps.length }, (_, index) => {
+            const chosen = similarSequenceSteps.find((step) => step.key === sequenceOrder[index]);
+            return (
+              <div key={index} className={chosen ? "sequence-slot filled" : "sequence-slot"}>
+                <span>{index + 1}</span>
+                <strong>{chosen?.label ?? "Choose an event"}</strong>
+              </div>
+            );
+          })}
+        </div>
+        <div className="sequence-card-grid">
+          {remainingSteps.map((step) => (
+            <button
+              key={step.key}
+              type="button"
+              disabled={isSubmitted}
+              onClick={() => setSequenceOrder([...sequenceOrder, step.key])}
+            >
+              <CircleNumber value={sequenceOrder.length + 1} />
+              {step.label}
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  if (sourceTaskId === "UI04") {
+    return (
+      <section className="practice-panel similar-task-panel">
+        <div className="section-title-row">
+          <h2>Pick the stronger evidence</h2>
+          <BadgeCheck size={18} />
+        </div>
+        <p className="task-helper-copy">Choose the explanation that uses plant-process evidence.</p>
+        <div className="explanation-list" aria-label="Similar explanation choices">
+          {similarExplanationOptions.map((option) => (
+            <button
+              key={option.key}
+              className={explanationChoice === option.key ? "selected" : ""}
+              type="button"
+              disabled={isSubmitted}
+              onClick={() => setExplanationChoice(option.key)}
+            >
+              <span>{option.label}</span>
+              {isSubmitted && <small>{option.reason}</small>}
+            </button>
+          ))}
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <section className="practice-panel similar-task-panel">
+      <SimilarPlantDiagram />
+      <div className="answer-grid" aria-label="Similar plant part labels">
+        {similarPlantTargets.map((target) => (
+          <label key={target.key} className="answer-slot">
+            <span>
+              {target.label}. {target.helper}
+            </span>
+            <select
+              value={labelAnswers[target.key]}
+              disabled={isSubmitted}
+              onChange={(event) =>
+                setLabelAnswers({
+                  ...labelAnswers,
+                  [target.key]: event.target.value as SimilarLabelKey,
+                })
+              }
+            >
+              <option value="">Choose label</option>
+              {similarLabelOptions.map((option) => (
+                <option key={option} value={option}>
+                  {option}
+                </option>
+              ))}
+            </select>
+          </label>
+        ))}
       </div>
     </section>
   );
@@ -809,6 +1091,7 @@ function ClassifyInputsTask({
                   type="button"
                   className={classification[term.key] === zone.key ? "selected" : ""}
                   onClick={() => setClassification({ ...classification, [term.key]: zone.key })}
+                  disabled={isSubmitted}
                 >
                   {zone.label}
                 </button>
@@ -853,9 +1136,11 @@ function ClassifyInputsTask({
 function BuildProcessTask({
   processOrder,
   setProcessOrder,
+  isSubmitted,
 }: {
   processOrder: ProcessStepKey[];
   setProcessOrder: (order: ProcessStepKey[]) => void;
+  isSubmitted: boolean;
 }) {
   const remainingSteps = processSteps.filter((step) => !processOrder.includes(step.key));
 
@@ -878,13 +1163,23 @@ function BuildProcessTask({
       </div>
       <div className="sequence-card-grid">
         {remainingSteps.map((step) => (
-          <button key={step.key} type="button" onClick={() => setProcessOrder([...processOrder, step.key])}>
+          <button
+            key={step.key}
+            type="button"
+            onClick={() => setProcessOrder([...processOrder, step.key])}
+            disabled={isSubmitted}
+          >
             <CircleNumber value={processOrder.length + 1} />
             {step.label}
           </button>
         ))}
       </div>
-      <button className="secondary-button compact-button" type="button" onClick={() => setProcessOrder([])}>
+      <button
+        className="secondary-button compact-button"
+        type="button"
+        onClick={() => setProcessOrder([])}
+        disabled={isSubmitted}
+      >
         <RefreshCw size={15} />
         Reset order
       </button>
@@ -916,7 +1211,7 @@ function AnalyzeSunlightTask({
         <div>
           <span className="small-label">Scenario</span>
           <strong>Sunlight is missing</strong>
-          <p>Choose what changes. Use because words.</p>
+          <p>Choose the 3 changes caused by missing sunlight.</p>
         </div>
       </div>
       <div className="cause-effect-grid" aria-label="Cause and effect choices">
@@ -926,6 +1221,7 @@ function AnalyzeSunlightTask({
             className={analyzeChoices.includes(option.key) ? "selected" : ""}
             type="button"
             onClick={() => toggleChoice(option.key)}
+            disabled={isSubmitted}
           >
             <strong>{option.label}</strong>
             {isSubmitted && <span>{option.detail}</span>}
@@ -935,7 +1231,8 @@ function AnalyzeSunlightTask({
       {isSubmitted && (
         <div className="because-strip">
           <span>Correct answer shown after submit</span>
-          <span>because energy helps leaves make glucose</span>
+          <span>Correct choices: less glucose, less oxygen, slower growth</span>
+          <span>because sunlight energy helps leaf cells make glucose</span>
           <span>oxygen is released after food is made</span>
         </div>
       )}
@@ -948,18 +1245,21 @@ function EvaluateExplanationTask({
   setEvaluateChoice,
   evaluateReason,
   setEvaluateReason,
+  isSubmitted,
 }: {
   evaluateChoice: ExplanationChoiceKey | "";
   setEvaluateChoice: (choice: ExplanationChoiceKey | "") => void;
   evaluateReason: EvaluationReasonKey | "";
   setEvaluateReason: (reason: EvaluationReasonKey | "") => void;
+  isSubmitted: boolean;
 }) {
   return (
     <section className="practice-panel">
       <div className="section-title-row">
-        <h2>Choose the strongest explanation</h2>
+        <h2>Choose one strongest explanation</h2>
         <BadgeCheck size={18} />
       </div>
+      <p className="task-helper-copy">Then choose the reason that makes it stronger.</p>
       <div className="explanation-list" aria-label="Student explanation choices">
         {explanationOptions.map((option) => (
           <button
@@ -967,6 +1267,7 @@ function EvaluateExplanationTask({
             className={evaluateChoice === option.key ? "selected" : ""}
             type="button"
             onClick={() => setEvaluateChoice(option.key)}
+            disabled={isSubmitted}
           >
             <span>{option.label}</span>
           </button>
@@ -979,6 +1280,7 @@ function EvaluateExplanationTask({
             className={evaluateReason === reason.key ? "selected" : ""}
             type="button"
             onClick={() => setEvaluateReason(reason.key)}
+            disabled={isSubmitted}
           >
             {reason.label}
           </button>
@@ -991,9 +1293,11 @@ function EvaluateExplanationTask({
 function OralRetellingTask({
   recordingState,
   setRecordingState,
+  isSubmitted,
 }: {
   recordingState: RecordingState;
   setRecordingState: (state: RecordingState) => void;
+  isSubmitted: boolean;
 }) {
   const isRecording = recordingState === "recording";
 
@@ -1005,6 +1309,7 @@ function OralRetellingTask({
           type="button"
           aria-label={isRecording ? "Finish recording" : "Hold to speak"}
           onClick={() => setRecordingState(isRecording ? "saved" : "recording")}
+          disabled={isSubmitted}
         >
           <Mic size={28} />
         </button>
@@ -1018,6 +1323,7 @@ function OralRetellingTask({
         className={isRecording ? "primary-button recording-button" : "primary-button recording-button"}
         type="button"
         onClick={() => setRecordingState(isRecording ? "saved" : "recording")}
+        disabled={isSubmitted}
       >
         <Mic size={18} />
         {isRecording ? "Finish recording" : "Hold to speak"}
@@ -1038,20 +1344,56 @@ function CircleNumber({ value }: { value: number }) {
   return <span className="circle-number">{value}</span>;
 }
 
-function TaskResultCard({ feedback }: { feedback: LastFeedback }) {
-  const isNiceWork = feedback.correctCount === feedback.totalCount;
+function TaskResultCard({
+  feedback,
+  nextTask,
+  navigate,
+}: {
+  feedback: LastFeedback;
+  nextTask: SafeTaskCard | undefined;
+  navigate: (route: RouteState) => void;
+}) {
+  const resultHeading =
+    feedback.feedbackKind === "score"
+      ? `${feedback.correctCount} of ${feedback.totalCount} correct`
+      : feedback.resultText;
+  const resultLabel =
+    feedback.feedbackKind === "speaking"
+      ? "Speaking feedback"
+      : feedback.feedbackKind === "practice"
+        ? "Practice feedback"
+        : "Result";
 
   return (
     <section className="task-result-card" aria-label="Task result">
       <div className="section-title-row">
         <div>
-          <span className="small-label">Result</span>
-          <h2>{feedback.correctCount} of {feedback.totalCount} correct</h2>
+          <span className="small-label">{resultLabel}</span>
+          <h2>{resultHeading}</h2>
         </div>
         <Check size={18} />
       </div>
-      <p>{isNiceWork ? "Nice work" : "Needs review"}</p>
-      <p>Correct answer shown after submit</p>
+      <p>{feedback.summary}</p>
+      <p>{feedback.detail}</p>
+      {nextTask ? (
+        <button
+          className="primary-button result-action-button"
+          type="button"
+          onClick={() => navigate({ screen: "task", taskId: nextTask.taskId })}
+        >
+          <ChevronRight size={17} />
+          Next task
+        </button>
+      ) : (
+        <button
+          className="primary-button result-action-button"
+          type="button"
+          onClick={() => navigate({ screen: "growth" })}
+        >
+          <BarChart3 size={17} />
+          View progress
+        </button>
+      )}
     </section>
   );
 }
@@ -1074,59 +1416,98 @@ function buildTaskSnapshot({
   evaluateChoice: ExplanationChoiceKey | "";
   evaluateReason: EvaluationReasonKey | "";
   recordingState: RecordingState;
-}): Pick<LastFeedback, "correctCount" | "totalCount" | "resultText"> {
-  if (task.taskId === "UI02") {
+}): Pick<LastFeedback, "feedbackKind" | "correctCount" | "totalCount" | "resultText" | "summary" | "detail"> {
+  const sourceTaskId = getSourceTaskId(task.taskId);
+
+  if (isSimilarTaskId(task.taskId)) {
+    return {
+      feedbackKind: "practice",
+      correctCount: 0,
+      totalCount: 0,
+      resultText: "Similar practice saved",
+      summary: "Good practice",
+      detail: "This similar exercise targets the same skill with a new situation.",
+    };
+  }
+
+  if (sourceTaskId === "UI02") {
     const placedCount = classificationTerms.filter((term) => classification[term.key]).length;
     const matchedCount = classificationTerms.filter((term) => classification[term.key] === expectedClassification[term.key]).length;
     return {
+      feedbackKind: "score",
       correctCount: matchedCount,
       totalCount: classificationTerms.length,
       resultText: `${placedCount} of ${classificationTerms.length} cards placed`,
+      summary: matchedCount === classificationTerms.length ? "Nice work" : "Needs review",
+      detail: "Correct answer shown after submit",
     };
   }
 
-  if (task.taskId === "UI03") {
+  if (sourceTaskId === "UI03") {
     const matchedCount = processSteps.filter((step, index) => processOrder[index] === step.key).length;
     return {
+      feedbackKind: "score",
       correctCount: matchedCount,
       totalCount: processSteps.length,
       resultText: `${processOrder.length} of ${processSteps.length} steps placed`,
+      summary: matchedCount === processSteps.length ? "Nice work" : "Needs review",
+      detail: "Correct answer shown after submit",
     };
   }
 
-  if (task.taskId === "UI08") {
+  if (sourceTaskId === "UI08") {
     const evidenceChoices: AnalyzeChoiceKey[] = ["glucose", "oxygen", "growth"];
-    const matchedCount = analyzeChoices.filter((choice) => evidenceChoices.includes(choice)).length;
+    const correctSelectedCount = analyzeChoices.filter((choice) => evidenceChoices.includes(choice)).length;
+    const wrongSelectedCount = analyzeChoices.filter((choice) => !evidenceChoices.includes(choice)).length;
+    const matchedCount = Math.max(0, correctSelectedCount - wrongSelectedCount);
     return {
+      feedbackKind: "score",
       correctCount: matchedCount,
       totalCount: evidenceChoices.length,
-      resultText: `${analyzeChoices.length} effects chosen`,
+      resultText:
+        wrongSelectedCount > 0
+          ? `${correctSelectedCount} right changes, ${wrongSelectedCount} unrelated choice`
+          : `${correctSelectedCount} right changes chosen`,
+      summary: matchedCount === evidenceChoices.length ? "Nice work" : "Needs review",
+      detail: "Correct answer shown after submit",
     };
   }
 
-  if (task.taskId === "UI04") {
+  if (sourceTaskId === "UI04") {
+    const matchedCount = Number(evaluateChoice === "strong") + Number(evaluateReason === "evidence");
     return {
-      correctCount: Number(evaluateChoice === "strong") + Number(Boolean(evaluateReason)),
+      feedbackKind: "score",
+      correctCount: matchedCount,
       totalCount: 2,
       resultText: evaluateChoice && evaluateReason ? "Choice and reason saved" : "Choice saved",
+      summary: matchedCount === 2 ? "Nice work" : "Needs review",
+      detail: "Correct answer shown after submit",
     };
   }
 
-  if (task.taskId === "UI17") {
+  if (sourceTaskId === "UI17") {
     const hasRecording = recordingState === "recording" || recordingState === "saved";
     return {
-      correctCount: hasRecording ? 1 : 0,
-      totalCount: 1,
+      feedbackKind: "speaking",
+      correctCount: 0,
+      totalCount: 0,
       resultText: hasRecording ? "Retelling draft saved" : "Retelling ready",
+      summary: hasRecording ? "Good retelling start" : "Voice draft needed",
+      detail: hasRecording
+        ? "You used a clear sequence. Next, add water, carbon dioxide, glucose, and oxygen in your retelling."
+        : "Hold to speak first so this prototype can show speaking feedback.",
     };
   }
 
   const selectedCount = plantTargets.filter((target) => answers[target.key]).length;
   const matchedCount = plantTargets.filter((target) => answers[target.key] === target.key).length;
   return {
+    feedbackKind: "score",
     correctCount: matchedCount,
     totalCount: plantTargets.length,
     resultText: `${selectedCount} of ${plantTargets.length} labels selected`,
+    summary: matchedCount === plantTargets.length ? "Nice work" : "Needs review",
+    detail: "Correct answer shown after submit",
   };
 }
 
@@ -1172,13 +1553,15 @@ function FeedbackScreen({
           <span>{lastFeedback?.title ?? task.title}</span>
           <strong>
             {lastFeedback
-              ? `${lastFeedback.correctCount} of ${lastFeedback.totalCount} correct`
+              ? lastFeedback.feedbackKind === "score"
+                ? `${lastFeedback.correctCount} of ${lastFeedback.totalCount} correct`
+                : lastFeedback.resultText
               : "No new result"}
           </strong>
         </div>
         <div className="feedback-line">
           <span>Feedback</span>
-          <strong>{lastFeedback ? (lastFeedback.correctCount === lastFeedback.totalCount ? "Nice work" : "Needs review") : "Ready"}</strong>
+          <strong>{lastFeedback?.summary ?? "Ready"}</strong>
         </div>
       </section>
       <section className="feedback-card">
@@ -1232,8 +1615,6 @@ function ProgressScreen({
   setDifficulty: (value: string) => void;
   navigate: (route: RouteState) => void;
 }) {
-  const [openSimilarTaskIds, setOpenSimilarTaskIds] = useState<string[]>([]);
-
   return (
     <div className="screen-stack">
       <section className="growth-hero">
@@ -1282,26 +1663,17 @@ function ProgressScreen({
               <div className="review-actions">
                 <button className="secondary-button compact-button" onClick={() => navigate({ screen: "task", taskId: item.taskId })}>
                   <RefreshCw size={15} />
-                  Retry Original
+                  Retry
                 </button>
                 <button
                   className="secondary-button compact-button"
                   type="button"
-                  onClick={() =>
-                    setOpenSimilarTaskIds((current) =>
-                      current.includes(item.taskId)
-                        ? current.filter((taskId) => taskId !== item.taskId)
-                        : [...current, item.taskId],
-                    )
-                  }
+                  onClick={() => navigate({ screen: "task", taskId: getSimilarTaskId(item.taskId) })}
                 >
                   <Leaf size={15} />
                   Practice Similar
                 </button>
               </div>
-              {openSimilarTaskIds.includes(item.taskId) && (
-                <SimilarPracticeCard item={similarPracticeByTaskId[item.taskId]} />
-              )}
             </article>
           ))}
         </div>
@@ -1315,21 +1687,6 @@ function ProgressScreen({
         difficulty={difficulty}
         setDifficulty={setDifficulty}
       />
-    </div>
-  );
-}
-
-function SimilarPracticeCard({ item }: { item: (typeof similarPracticeByTaskId)[string] | undefined }) {
-  if (!item) {
-    return null;
-  }
-
-  return (
-    <div className="similar-practice-card">
-      <span className="small-label">Similar Practice</span>
-      <strong>{item.title}</strong>
-      <p>{item.prompt}</p>
-      <span className="step-pill">{item.bloom}</span>
     </div>
   );
 }
@@ -1440,7 +1797,7 @@ function ProfileScreen({ experience }: { experience: StudentExperience }) {
             <span>{profile.classInfo.group}</span>
             <small>Weekly goal: {profile.classInfo.weeklyGoal}</small>
           </div>
-          <button className="secondary-button compact-button" type="button">
+          <button className="secondary-button compact-button class-chat-button" type="button">
             <MessageCircle size={15} />
             Enter Group Chat
           </button>
@@ -1738,6 +2095,36 @@ function PlantDiagram() {
         ["B", 250, 64],
         ["C", 42, 148],
         ["D", 248, 194],
+      ].map(([label, x, y]) => (
+        <g key={label}>
+          <rect x={Number(x) - 24} y={Number(y) - 18} width="48" height="36" rx="8" fill="#ffffff" stroke="#9aa9a7" strokeDasharray="5 4" />
+          <text x={Number(x)} y={Number(y) + 5} textAnchor="middle" fontSize="18" fontWeight="700" fill="#123d35">
+            {label}
+          </text>
+        </g>
+      ))}
+    </svg>
+  );
+}
+
+function SimilarPlantDiagram() {
+  return (
+    <svg className="plant-diagram" viewBox="0 0 320 230" role="img" aria-label="New plant picture for similar practice">
+      <rect x="0" y="0" width="320" height="230" rx="8" fill="#f8fbf6" />
+      <path d="M74 188 C112 166 218 166 252 188 C220 210 105 211 74 188Z" fill="#8b5a2b" opacity="0.9" />
+      <path d="M158 184 C154 148 156 103 164 68" stroke="#2f7d4f" strokeWidth="8" strokeLinecap="round" />
+      <ellipse cx="137" cy="112" rx="32" ry="17" fill="#74c277" transform="rotate(-28 137 112)" />
+      <ellipse cx="192" cy="116" rx="34" ry="18" fill="#65b96a" transform="rotate(30 192 116)" />
+      <circle cx="164" cy="64" r="16" fill="#f4cf64" />
+      <circle cx="164" cy="64" r="7" fill="#a6612b" />
+      <circle cx="178" cy="190" r="6" fill="#5a321b" />
+      <line x1="82" y1="42" x2="151" y2="62" stroke="#88a199" strokeWidth="2" strokeDasharray="4 4" />
+      <line x1="250" y1="102" x2="196" y2="115" stroke="#88a199" strokeWidth="2" strokeDasharray="4 4" />
+      <line x1="82" y1="202" x2="178" y2="190" stroke="#88a199" strokeWidth="2" strokeDasharray="4 4" />
+      {[
+        ["A", 60, 34],
+        ["B", 256, 92],
+        ["C", 62, 202],
       ].map(([label, x, y]) => (
         <g key={label}>
           <rect x={Number(x) - 24} y={Number(y) - 18} width="48" height="36" rx="8" fill="#ffffff" stroke="#9aa9a7" strokeDasharray="5 4" />

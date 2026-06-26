@@ -38,13 +38,18 @@ const screenText = () => document.body.textContent ?? "";
 const buttonTexts = () =>
   Array.from(document.querySelectorAll("button")).map((button) => button.textContent?.replace(/\s+/g, " ").trim());
 
-const clickButton = (label: string) => {
+const getButton = (label: string): HTMLButtonElement => {
   const button = Array.from(document.querySelectorAll("button")).find(
     (candidate) => candidate.textContent?.replace(/\s+/g, " ").trim() === label,
-  );
+  ) as HTMLButtonElement | undefined;
   if (!button) {
     throw new Error(`Button not found: ${label}`);
   }
+  return button;
+};
+
+const clickButton = (label: string) => {
+  const button = getButton(label);
   act(() => {
     button.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
   });
@@ -121,13 +126,14 @@ describe("student web UI refinement", () => {
     renderRoute("/student/tasks/UI08");
     copy = screenText();
     expect(copy).toContain("Sunlight is missing");
+    expect(copy).toContain("Choose the 3 changes caused by missing sunlight.");
     expect(copy).not.toContain("Sunlight gives energy to make food.");
     expect(copy).not.toContain("make glucose");
     expect(copy).not.toContain("release oxygen");
 
     renderRoute("/student/tasks/UI04");
     copy = screenText();
-    expect(copy).toContain("Choose the strongest explanation");
+    expect(copy).toContain("Choose one strongest explanation");
     expect(copy).toContain("uses evidence");
   });
 
@@ -141,15 +147,22 @@ describe("student web UI refinement", () => {
     expect(screenText()).toContain("0 of 6 correct");
     expect(screenText()).toContain("Correct answer shown after submit");
     expect(screenText()).toContain("Inputs:");
+    expect(getButton("Check").disabled).toBe(true);
+    expect(buttonTexts()).toContain("Next task");
+    clickButton("Next task");
+    expect(screenText()).toContain("Build the photosynthesis process");
 
     renderRoute("/student/tasks/UI08");
     expect(screenText()).not.toContain("Result");
-    expect(screenText()).not.toContain("because energy helps leaves make glucose");
+    expect(screenText()).not.toContain("because sunlight energy helps leaf cells make glucose");
 
+    ["Less glucose", "Less oxygen", "Slower growth", "Water disappears"].forEach(clickButton);
     clickButton("Check");
     expect(screenText()).toContain("Result");
+    expect(screenText()).toContain("2 of 3 correct");
+    expect(screenText()).not.toContain("3 of 3 correct");
     expect(screenText()).toContain("Correct answer shown after submit");
-    expect(screenText()).toContain("because energy helps leaves make glucose");
+    expect(screenText()).toContain("because sunlight energy helps leaf cells make glucose");
   });
 
   it("removes repeated navigation controls from exercise pages", () => {
@@ -176,6 +189,13 @@ describe("student web UI refinement", () => {
     clickButton("Hold to speak");
     copy = screenText();
     expect(copy).toContain("Finish recording");
+    clickButton("Finish recording");
+    clickButton("Submit");
+    copy = screenText();
+    expect(copy).toContain("Speaking feedback");
+    expect(copy).toContain("Retelling draft saved");
+    expect(copy).toContain("Good retelling start");
+    expect(copy).not.toContain("1 of 1 correct");
   });
 
   it("renders Progress as credits, review notebook, distinct similar practice, and reflection submit", () => {
@@ -184,27 +204,23 @@ describe("student web UI refinement", () => {
 
     expect(copy).toContain("My Credits");
     expect(copy).toContain("Review Notebook");
-    expect(copy).toContain("Retry Original");
+    expect(copy).toContain("Retry");
+    expect(copy).not.toContain("Retry Original");
     expect(copy).toContain("Practice Similar");
     expect(copy).toContain("Reflection");
     expect(copy).toContain("Submit");
     expect(copy).not.toContain("Vocabulary accuracy");
     expect(copy).not.toContain("Past Accuracy");
 
-    Array.from(document.querySelectorAll("button"))
-      .filter((button) => button.textContent?.replace(/\s+/g, " ").trim() === "Practice Similar")
-      .forEach((button) => {
-        act(() => {
-          button.dispatchEvent(new window.MouseEvent("click", { bubbles: true }));
-        });
-      });
+    clickButton("Practice Similar");
     copy = screenText();
-    expect(copy).toContain("Similar Practice");
     expect(copy).toContain("Label leaf, flower, and seed");
-    expect(copy).toContain("Classify what a plant takes in and gives out during daytime");
-    expect(copy).toContain("Order sunlight-to-oxygen steps");
-    expect(copy).toContain("Pick the explanation with stronger evidence");
+    expect(copy).toContain("Use a new plant picture and match each visible part to the correct word.");
+    expect(copy).toContain("bright part where seeds can form");
+    expect(copy).not.toContain("green flat part");
+    expect(window.location.pathname).toBe("/student/tasks/SIM_UI01");
 
+    renderRoute("/student/progress");
     const textarea = document.querySelector(".reflection-panel textarea") as HTMLTextAreaElement;
     act(() => {
       textarea.value = "I used sequence words.";

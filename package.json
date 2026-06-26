@@ -1,0 +1,39 @@
+{
+  "name": "adaptlearn-student-web-production-skeleton",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Production-oriented AdaptLearn Student Web skeleton with Next.js, FastAPI, Supabase, and OpenAI adapters.",
+  "workspaces": [
+    "apps/admin-web",
+    "apps/foundation-console",
+    "apps/web",
+    "packages/shared"
+  ],
+  "scripts": {
+    "dev:admin": "npm --workspace apps/admin-web run dev",
+    "build:admin": "npm --workspace apps/admin-web run build",
+    "test:admin": "npm --workspace apps/admin-web run test",
+    "typecheck:admin": "npm --workspace apps/admin-web run typecheck",
+    "dev:foundation": "npm --workspace apps/foundation-console run dev",
+    "build:foundation": "npm --workspace apps/foundation-console run build",
+    "test:foundation": "npm --workspace apps/foundation-console run test",
+    "test:e2e:foundation": "npm --workspace apps/foundation-console run test:e2e",
+    "typecheck:foundation": "npm --workspace apps/foundation-console run typecheck",
+    "dev:web": "npm --workspace apps/web run dev",
+    "build:web": "npm --workspace apps/web run build",
+    "test:web": "npm --workspace apps/web run test",
+    "test:e2e": "npm --workspace apps/web run test:e2e",
+    "typecheck:web": "npm --workspace apps/web run typecheck",
+    "export:competition-html": "node scripts/generate_competition_html.mjs",
+    "ops:supabase:dry-run": "python3 scripts/apply_supabase_migrations.py --dry-run --include-seed",
+    "ops:supabase:apply": "python3 scripts/apply_supabase_migrations.py",
+    "ops:supabase:seed": "python3 scripts/apply_supabase_migrations.py --include-seed",
+    "ops:readiness": "python3 scripts/live_readiness_check.py",
+    "dev:api": "python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000 --app-dir apps/api",
+    "test:api": "python -m pytest apps/api/tests",
+    "test": "npm run test:web && npm run test:foundation && npm run test:api"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.54.0"
+  }
+}

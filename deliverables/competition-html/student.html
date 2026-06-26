@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AdaptLearn Student Web - Competition HTML</title>
+  <meta name="description" content="Offline Student Web demo for judges." />
+  <style>
+:root{--surface:#f4f7f1;--card:#fff;--soft:#eef6f2;--text:#17342f;--muted:#66756f;--border:#d9e2dc;--accent:#16845f;--accent-dark:#0f644d;--sky:#2f7fb8;--amber:#c88924;--shadow:0 18px 48px rgba(19,52,47,.14);font-family:Inter,system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:var(--text);background:var(--surface)}
+*{box-sizing:border-box}body{margin:0;min-width:320px;background:linear-gradient(130deg,rgba(47,127,184,.12),transparent 30%),linear-gradient(320deg,rgba(200,137,36,.16),transparent 28%),var(--surface)}button{font:inherit;cursor:pointer}.wrap{min-height:100vh;display:grid;place-items:center;padding:28px}.phone{width:min(100%,430px);min-height:760px;max-height:920px;display:grid;grid-template-rows:auto 1fr auto;overflow:hidden;border:1px solid rgba(23,52,47,.18);border-radius:34px;background:#fff;box-shadow:var(--shadow)}.chrome{border-bottom:1px solid var(--border);background:rgba(255,255,255,.94)}.statusbar{height:32px;display:flex;align-items:center;justify-content:space-between;padding:0 24px;font-weight:800;font-size:13px}.header{min-height:72px;display:flex;align-items:center;justify-content:space-between;gap:14px;padding:12px 18px 16px}.brand{display:flex;align-items:center;gap:10px}.logo{width:36px;height:36px;display:grid;place-items:center;border-radius:50%;background:#eef8ee;color:var(--accent);font-weight:900}.brand strong{display:block;color:var(--accent-dark)}.brand small,.muted{color:var(--muted);font-size:13px}.scroll{min-height:0;overflow:auto;padding:16px}.screen{display:none;gap:14px;padding-bottom:12px}.screen.active{display:grid}.panel{border:1px solid var(--border);border-radius:8px;background:#fff;box-shadow:0 1px 2px rgba(23,52,47,.06);padding:16px}.hero{display:grid;grid-template-columns:1fr 136px;align-items:center;min-height:158px;background:linear-gradient(120deg,#fff 0%,#f5fbf2 58%,#eaf5ed 100%)}h1,h2,p{margin:0}h1{font-size:32px;line-height:1.06;color:#123d35}.eyebrow{color:var(--accent-dark);font-size:12px;font-weight:900;text-transform:uppercase}.unit{display:inline-flex;margin-top:8px;border-radius:999px;background:#e5f3ef;color:var(--accent-dark);padding:4px 10px;font-size:12px;font-weight:900}.plant{width:124px;height:124px;border-radius:22px;background:radial-gradient(circle at 50% 82%,#b98b4e 0 12%,transparent 13%),linear-gradient(#2f9b6d,#2f9b6d) 50% 58%/8px 52px no-repeat}.plant:before,.plant:after{content:"";display:block;position:relative;width:58px;height:38px;border-radius:60% 40% 60% 40%;background:#75bd68}.plant:before{left:28px;top:28px;transform:rotate(-30deg)}.plant:after{left:56px;top:22px;transform:rotate(25deg)}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}.summary strong{display:block;margin-top:4px}.row{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}.progress{height:10px;overflow:hidden;border-radius:999px;background:#e6ece8;margin:14px 0}.progress span{display:block;height:100%;width:0;background:linear-gradient(90deg,var(--accent),#7dbb4f)}.chips{display:flex;flex-wrap:wrap;gap:7px;margin-top:12px}.chip,.pill{display:inline-flex;align-items:center;border:1px solid var(--border);border-radius:999px;background:#fbfcf8;padding:5px 9px;font-size:12px;font-weight:800;color:#52635e}.pill{background:#eaf5ef;color:var(--accent-dark)}.primary,.secondary{min-height:42px;display:inline-flex;align-items:center;justify-content:center;gap:8px;border-radius:999px;border:1px solid var(--accent);background:var(--accent);color:#fff;padding:9px 16px;font-weight:850}.secondary{background:#fff;color:var(--accent-dark);border-color:var(--border)}.task-feature{display:grid;gap:12px}.path-task{display:grid;grid-template-columns:38px 1fr;gap:10px;border:1px solid var(--border);border-radius:8px;padding:12px;background:#fff}.path-task.locked{opacity:.62}.marker{width:32px;height:32px;display:grid;place-items:center;border-radius:50%;background:#eaf5ef;color:var(--accent-dark);font-weight:900}.answer-grid{display:grid;gap:8px}.choice{border:1px solid var(--border);border-radius:8px;background:#fbfcf8;padding:10px;text-align:left}.choice.selected{border-color:var(--accent);background:#e9f7ef}.feedback{border-left:4px solid var(--accent);background:#f2faf5}.bottom{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;padding:10px 14px 16px;border-top:1px solid var(--border);background:#fff}.bottom button{border:0;background:transparent;color:#60736b;font-weight:850;padding:8px;border-radius:8px}.bottom button.active{background:#eaf5ef;color:var(--accent-dark)}.notice{font-size:12px;color:var(--muted);line-height:1.35}@media(max-width:520px){.wrap{padding:0}.phone{min-height:100vh;border-radius:0;border:0}.hero{grid-template-columns:1fr}.plant{display:none}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <main class="phone" aria-label="AdaptLearn Student Web offline demo">
+    <header class="chrome">
+      <div class="statusbar"><span>09:41</span><span>Offline demo</span></div>
+      <div class="header">
+        <div class="brand"><span class="logo">A</span><span><strong>AdaptLearn</strong><small>Student Web</small></span></div>
+        <span class="chip">Grade 7 English</span>
+      </div>
+    </header>
+    <section class="scroll">
+      <div class="screen active" data-screen="home">
+        <section class="panel hero">
+          <div><p class="eyebrow">Unit 6</p><span class="unit">U6</span><h1>The Power of Plants</h1><p class="muted">Practice plant vocabulary, photosynthesis inputs/outputs, and evidence-backed explanation.</p></div>
+          <div class="plant" aria-hidden="true"></div>
+        </section>
+        <section class="grid2 summary">
+          <div class="panel"><span class="eyebrow">Today</span><strong>Plant processes</strong><p class="muted">Unit 6 task</p></div>
+          <div class="panel"><span class="eyebrow">Deadline</span><strong>18:00</strong><p class="muted">Finish today</p></div>
+        </section>
+        <section class="panel">
+          <div class="row"><div><span class="eyebrow">Learning Path</span><h2><span id="doneCount">0</span> of 3 tasks complete</h2></div><button class="secondary" data-go="path">View path</button></div>
+          <div class="progress"><span id="studentProgress"></span></div>
+          <div class="chips"><span class="chip">15 min</span><span class="chip">Published</span><span class="chip">Safe DTO only</span></div>
+        </section>
+        <section class="panel task-feature">
+          <div class="row"><div><span class="eyebrow">Today's Task</span><h2>Label the parts of a plant</h2></div><span class="pill">Step 1</span></div>
+          <p class="muted">The student sees only safe labels and next action, not rule weights or teacher audit details.</p>
+          <button class="primary" data-go="task1">Start Task 1</button>
+        </section>
+        <p class="notice">Prototype data; not a real model result.</p>
+      </div>
+      <div class="screen" data-screen="path">
+        <section class="panel"><span class="eyebrow">Unit 6 Learning Path</span><h1>Build vocabulary, process sequencing, and explanation quality.</h1><div class="chips"><span class="chip">15 min</span><span class="chip">3 tasks</span><span class="chip">Published</span></div></section>
+        <section class="screen active"><article class="path-task active">
+        <span class="marker">1</span>
+        <div>
+          <div class="row"><strong>Label the parts of a plant</strong><span class="pill">Remember</span></div>
+          <p>Word-picture matching · 4 min · Root, Stem, Leaf, Seed</p>
+        </div>
+      </article><article class="path-task ">
+        <span class="marker">2</span>
+        <div>
+          <div class="row"><strong>Classify photosynthesis inputs and outputs</strong><span class="pill">Understand</span></div>
+          <p>Classification · 5 min · Sunlight, Water, Carbon dioxide, Oxygen</p>
+        </div>
+      </article><article class="path-task locked">
+        <span class="marker">3</span>
+        <div>
+          <div class="row"><strong>Build the photosynthesis process</strong><span class="pill">Analyze</span></div>
+          <p>Process sequencing · 6 min · Photosynthesis sequence, Glucose, Oxygen</p>
+        </div>
+      </article></section>
+        <button class="primary" data-go="task1">Start first task</button>
+      </div>
+      <div class="screen" data-screen="task1">
+        <section class="panel"><span class="eyebrow">Task UI01</span><h1>Label the parts of a plant</h1><p class="muted">Match the plant words to the correct parts. This task uses safe labels only.</p><div class="chips"><span class="chip">Root</span><span class="chip">Stem</span><span class="chip">Leaf</span><span class="chip">Seed</span></div></section>
+        <section class="panel answer-grid" id="task1Choices">
+          <button class="choice">Root -> takes in water</button>
+          <button class="choice">Stem -> holds the plant up</button>
+          <button class="choice">Leaf -> makes food</button>
+        </section>
+        <button class="primary" id="submitTask1">Submit Task 1</button>
+      </div>
+      <div class="screen" data-screen="feedback1">
+        <section class="panel feedback"><span class="eyebrow">Feedback</span><h1>Nice start</h1><p>You matched the main plant parts. Next, sort photosynthesis ideas into inputs and outputs.</p><div class="chips"><span class="pill">Vocabulary focus</span><span class="chip">Safe feedback only</span></div></section>
+        <button class="primary" data-go="task2">Next task</button>
+      </div>
+      <div class="screen" data-screen="task2">
+        <section class="panel"><span class="eyebrow">Task UI02</span><h1>Classify photosynthesis inputs and outputs</h1><p class="muted">Sort each idea into input or output. Internal rubrics stay hidden from students.</p></section>
+        <section class="grid2">
+          <div class="panel"><span class="eyebrow">Inputs</span><div class="chips"><span class="chip">Sunlight</span><span class="chip">Water</span><span class="chip">Carbon dioxide</span></div></div>
+          <div class="panel"><span class="eyebrow">Outputs</span><div class="chips"><span class="chip">Oxygen</span><span class="chip">Glucose</span></div></div>
+        </section>
+        <button class="primary" id="submitTask2">Submit Task 2</button>
+      </div>
+      <div class="screen" data-screen="complete">
+        <section class="panel feedback"><span class="eyebrow">Path progress</span><h1>2 of 3 tasks complete</h1><p>Student output remains safe: no ReviewCase details, rule weights, raw BKT/IRT, or teacher-only notes.</p><div class="progress"><span style="width:66%"></span></div></section>
+        <button class="secondary" data-go="home">Back home</button>
+      </div>
+    </section>
+    <nav class="bottom" aria-label="Student demo navigation">
+      <button class="active" data-go="home">Home</button><button data-go="path">Path</button><button data-go="task1">Task</button>
+    </nav>
+  </main>
+</div>
+<script>
+const screens=[...document.querySelectorAll('.screen[data-screen]')];
+const nav=[...document.querySelectorAll('[data-go]')];
+let completed=0;
+function go(name){screens.forEach(s=>s.classList.toggle('active',s.dataset.screen===name));document.querySelectorAll('.bottom button').forEach(b=>b.classList.toggle('active',b.dataset.go===name));}
+nav.forEach(b=>b.addEventListener('click',()=>go(b.dataset.go)));
+document.querySelectorAll('.choice').forEach(c=>c.addEventListener('click',()=>c.classList.toggle('selected')));
+document.getElementById('submitTask1').addEventListener('click',()=>{completed=Math.max(completed,1);document.getElementById('doneCount').textContent=completed;document.getElementById('studentProgress').style.width='33%';go('feedback1');});
+document.getElementById('submitTask2').addEventListener('click',()=>{completed=Math.max(completed,2);document.getElementById('doneCount').textContent=completed;document.getElementById('studentProgress').style.width='66%';go('complete');});
+</script>
+</body>
+</html>
